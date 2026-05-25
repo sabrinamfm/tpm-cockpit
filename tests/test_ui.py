@@ -27,6 +27,7 @@ def test_program_ui_links_to_detail_page(client) -> None:
     assert "Work Items" in detail_response.text
     assert "Risks" in detail_response.text
     assert "Dependencies" in detail_response.text
+    assert "Dependencies" in detail_response.text
     assert "Decisions" in detail_response.text
     assert "Notes" in detail_response.text
 
@@ -193,3 +194,69 @@ def test_mark_touched_from_ui_redirects_to_program(client) -> None:
     assert response.status_code == 303
     assert response.headers["location"] == f"/programs/{program['id']}/view"
     assert touched["last_touched_at"] is not None
+
+
+def test_dependency_section_is_visible_with_hidden_create_panel(client) -> None:
+    program = client.post("/programs", json={"name": "Dependency UI"}).json()
+
+    default_response = client.get(f"/programs/{program['id']}/view")
+    opened_response = client.get(f"/programs/{program['id']}/view?show_new_dependency=1")
+
+    assert default_response.status_code == 200
+    assert "Dependencies" in default_response.text
+    assert '<details id="new-dependency" class="collapsible-panel">' in default_response.text
+    assert '<details id="new-dependency" class="collapsible-panel" open>' in opened_response.text
+
+
+def test_dependency_ui_filters_and_inline_edit(client) -> None:
+    program = client.post("/programs", json={"name": "Dependency Filter UI"}).json()
+    first = client.post(
+        f"/programs/{program['id']}/dependencies",
+        json={
+            "title": "Security dependency",
+            "dependency_type": "security",
+            "owner": "Ada",
+            "blocking_level": "critical",
+            "status": "blocked",
+        },
+    ).json()
+    client.post(
+        f"/programs/{program['id']}/dependencies",
+        json={
+            "title": "Finance dependency",
+            "dependency_type": "finance",
+            "owner": "Grace",
+            "blocking_level": "low",
+        },
+    )
+
+    filtered_response = client.get(
+        f"/programs/{program['id']}/view?dependency_type_filter=security&blocking_level_filter=critical&dependency_owner_filter=Ada"
+    )
+    edit_response = client.get(f"/programs/{program['id']}/view?edit_dependency_id={first['id']}")
+
+    assert filtered_response.status_code == 200
+    assert "Security dependency" in filtered_response.text
+    assert "Finance dependency" not in filtered_response.text
+    assert "Blocked" in filtered_response.text
+    assert "Critical" in filtered_response.text
+    assert edit_response.status_code == 200
+    assert '<details id="edit-dependency" class="collapsible-panel" open>' in edit_response.text
+
+
+def test_dependency_confirm_and_delete_confirmation_ui(client) -> None:
+    program = client.post("/programs", json={"name": "Dependency Actions"}).json()
+    dependency = client.post(
+        f"/programs/{program['id']}/dependencies",
+        json={"title": "Confirmable dependency"},
+    ).json()
+
+    confirm_response = client.post(f"/dependencies/{dependency['id']}/confirm-ui", follow_redirects=False)
+    confirmed = client.get(f"/dependencies/{dependency['id']}").json()
+    delete_confirm_response = client.get(f"/dependencies/{dependency['id']}/delete/confirm")
+
+    assert confirm_response.status_code == 303
+    assert confirm_response.headers["location"] == f"/programs/{program['id']}/view"
+    assert confirmed["last_confirmation_at"] is not None
+    assert delete_confirm_response.status_code == 200
+    assert "Confirm Delete" in delete_confirm_response.text

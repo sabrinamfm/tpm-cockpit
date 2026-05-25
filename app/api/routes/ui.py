@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
+from app.domain.dependencies import dependency_is_stale
 from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
-from app.models import Program, SourceType, WorkItem
+from app.models import Dependency, Program, SourceType, WorkItem
 
 router = APIRouter(tags=["ui"])
 
@@ -18,6 +19,22 @@ PROGRAM_STATUSES = ("active", "paused", "completed", "archived")
 WORK_ITEM_STATUSES = ("open", "in_progress", "blocked", "completed", "cancelled")
 WORK_ITEM_PRIORITIES = ("low", "medium", "high", "critical")
 WORK_ITEM_PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+DEPENDENCY_TYPES = (
+    "team",
+    "approval",
+    "infrastructure",
+    "release",
+    "vendor",
+    "legal",
+    "finance",
+    "security",
+    "product",
+    "technical",
+    "operational",
+)
+DEPENDENCY_STATUSES = ("open", "in_progress", "confirmed", "blocked", "resolved", "cancelled")
+BLOCKING_LEVELS = ("low", "medium", "high", "critical")
+BLOCKING_LEVEL_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 ATTENTION_STATES = ("Needs attention", "OK")
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -33,6 +50,12 @@ WORK_ITEM_SORT_LABELS = {
     "due_date": "Due Date",
     "updated_at": "Updated",
     "last_touched_at": "Last Touched",
+}
+DEPENDENCY_SORT_LABELS = {
+    "due_date": "Due Date",
+    "updated_at": "Updated",
+    "last_confirmation_at": "Last Confirmation",
+    "blocking_level": "Blocking Level",
 }
 
 
@@ -167,6 +190,7 @@ def _page_shell(title: str, body: str) -> str:
     .blocked-row {{ background: #fff4f3; }}
     .overdue-row {{ background: #fff7ed; }}
     .stale-row {{ background: #fffbeb; }}
+    .critical-row {{ background: #fef3f2; }}
     .detail-grid {{ display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }}
     .placeholder-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; }}
     .placeholder {{ min-height: 86px; }}
@@ -453,6 +477,12 @@ def _parse_due_date(value: str) -> Optional[date]:
     return date.fromisoformat(value)
 
 
+def _parse_optional_datetime(value: str) -> Optional[datetime]:
+    if not value:
+        return None
+    return datetime.fromisoformat(value)
+
+
 def _parse_optional_int(value: str) -> Optional[int]:
     if not value:
         return None
@@ -477,6 +507,16 @@ def _work_item_sort_key(work_item: WorkItem, sort: str):
     return (work_item.updated_at, work_item.id)
 
 
+def _dependency_sort_key(dependency: Dependency, sort: str):
+    if sort == "due_date":
+        return (dependency.due_date or date.max, dependency.id)
+    if sort == "last_confirmation_at":
+        return (dependency.last_confirmation_at or datetime.min, dependency.id)
+    if sort == "blocking_level":
+        return (BLOCKING_LEVEL_RANK.get(dependency.blocking_level, 99), dependency.id)
+    return (dependency.updated_at, dependency.id)
+
+
 @router.get("/programs/{program_id}/view", response_class=HTMLResponse, include_in_schema=False)
 def program_detail(
     program_id: int,
@@ -489,11 +529,22 @@ def program_detail(
     show_new_work_item: Optional[str] = None,
     work_item_error: Optional[str] = None,
     edit_work_item_id: Optional[int] = None,
+    dependency_status_filter: Optional[str] = None,
+    dependency_type_filter: Optional[str] = None,
+    blocking_level_filter: Optional[str] = None,
+    dependency_owner_filter: Optional[str] = None,
+    dependency_sort: str = "updated_at",
+    show_new_dependency: Optional[str] = None,
+    dependency_error: Optional[str] = None,
+    edit_dependency_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ) -> str:
     program = db.scalars(
         select(Program)
-        .options(selectinload(Program.work_items).selectinload(WorkItem.source_type))
+        .options(
+            selectinload(Program.work_items).selectinload(WorkItem.source_type),
+            selectinload(Program.dependencies),
+        )
         .where(Program.id == program_id)
     ).one_or_none()
     if program is None:
@@ -508,6 +559,14 @@ def program_detail(
         stale_filter = None
     if work_sort not in WORK_ITEM_SORT_LABELS:
         work_sort = "updated_at"
+    if dependency_status_filter and dependency_status_filter not in DEPENDENCY_STATUSES:
+        dependency_status_filter = None
+    if dependency_type_filter and dependency_type_filter not in DEPENDENCY_TYPES:
+        dependency_type_filter = None
+    if blocking_level_filter and blocking_level_filter not in BLOCKING_LEVELS:
+        blocking_level_filter = None
+    if dependency_sort not in DEPENDENCY_SORT_LABELS:
+        dependency_sort = "updated_at"
 
     work_items = list(program.work_items)
     if work_status_filter:
@@ -525,6 +584,21 @@ def program_detail(
         work_items = [item for item in work_items if item.source_type_id == source_type_id]
     reverse = work_sort == "updated_at"
     work_items = sorted(work_items, key=lambda item: _work_item_sort_key(item, work_sort), reverse=reverse)
+    dependencies = list(program.dependencies)
+    if dependency_status_filter:
+        dependencies = [item for item in dependencies if item.status == dependency_status_filter]
+    if dependency_type_filter:
+        dependencies = [item for item in dependencies if item.dependency_type == dependency_type_filter]
+    if blocking_level_filter:
+        dependencies = [item for item in dependencies if item.blocking_level == blocking_level_filter]
+    if dependency_owner_filter:
+        dependencies = [item for item in dependencies if item.owner == dependency_owner_filter]
+    dependency_reverse = dependency_sort in ("updated_at", "last_confirmation_at")
+    dependencies = sorted(
+        dependencies,
+        key=lambda item: _dependency_sort_key(item, dependency_sort),
+        reverse=dependency_reverse,
+    )
 
     attention = program_attention_state(program)
     attention_class = "ok" if attention == "OK" else "attention"
@@ -557,10 +631,48 @@ def program_detail(
         _select_option(value, label, work_sort)
         for value, label in WORK_ITEM_SORT_LABELS.items()
     )
+    dependency_type_options = "".join(
+        _select_option(value, value.replace("_", " ").title(), None)
+        for value in DEPENDENCY_TYPES
+    )
+    dependency_status_options = "".join(
+        _select_option(value, value.replace("_", " ").title(), None)
+        for value in DEPENDENCY_STATUSES
+    )
+    blocking_level_options = "".join(
+        _select_option(value, value.title(), "medium")
+        for value in BLOCKING_LEVELS
+    )
+    dependency_status_filter_options = '<option value="">All statuses</option>' + "".join(
+        _select_option(value, value.replace("_", " ").title(), dependency_status_filter)
+        for value in DEPENDENCY_STATUSES
+    )
+    dependency_type_filter_options = '<option value="">All types</option>' + "".join(
+        _select_option(value, value.replace("_", " ").title(), dependency_type_filter)
+        for value in DEPENDENCY_TYPES
+    )
+    blocking_level_filter_options = '<option value="">All levels</option>' + "".join(
+        _select_option(value, value.title(), blocking_level_filter)
+        for value in BLOCKING_LEVELS
+    )
+    dependency_owner_options = '<option value="">All owners</option>' + "".join(
+        _select_option(owner, owner, dependency_owner_filter)
+        for owner in sorted({item.owner for item in program.dependencies if item.owner})
+    )
+    dependency_sort_options = "".join(
+        _select_option(value, label, dependency_sort)
+        for value, label in DEPENDENCY_SORT_LABELS.items()
+    )
     edit_work_item = None
     if edit_work_item_id is not None:
         edit_work_item = next(
             (item for item in program.work_items if item.id == edit_work_item_id),
+            None,
+        )
+    edit_dependency = None
+    if edit_dependency_id is not None:
+        edit_dependency = next(
+            (item for item in program.dependencies if item.id == edit_dependency_id),
             None,
         )
 
@@ -678,6 +790,120 @@ def program_detail(
         </details>
         """
 
+    dependency_rows = []
+    for dependency in dependencies:
+        blocked = dependency.status == "blocked"
+        critical = dependency.blocking_level == "critical"
+        stale_dependency = dependency_is_stale(dependency)
+        dependency_row_class = (
+            "blocked-row" if blocked else "critical-row" if critical else "stale-row" if stale_dependency else ""
+        )
+        dependency_signals = []
+        if blocked:
+            dependency_signals.append('<span class="pill attention">Blocked</span>')
+        if critical:
+            dependency_signals.append('<span class="pill attention">Critical</span>')
+        if stale_dependency:
+            dependency_signals.append('<span class="pill attention">Stale</span>')
+        dependency_signal_html = " ".join(dependency_signals)
+        dependency_rows.append(
+            f"""
+            <tr class="{dependency_row_class}">
+              <td>{escape(dependency.title)} {dependency_signal_html}</td>
+              <td><span class="pill">{escape(dependency.status)}</span></td>
+              <td>{escape(dependency.dependency_type)}</td>
+              <td><span class="pill">{escape(dependency.blocking_level)}</span></td>
+              <td>{escape(dependency.owner or "")}</td>
+              <td>{escape(dependency.external_team or "")}</td>
+              <td>{escape(_format_date(dependency.due_date))}</td>
+              <td>{escape(_format_datetime(dependency.last_confirmation_at))}</td>
+              <td>{escape(_format_datetime(dependency.updated_at))}</td>
+              <td class="row-actions">
+                <details class="action-menu">
+                  <summary class="button secondary">Actions</summary>
+                  <div class="menu">
+                    <a href="/programs/{program.id}/view?edit_dependency_id={dependency.id}#edit-dependency">Edit</a>
+                    <form method="post" action="/dependencies/{dependency.id}/confirm-ui">
+                      <button type="submit">Confirm Dependency</button>
+                    </form>
+                    <a href="/dependencies/{dependency.id}/delete/confirm">Delete</a>
+                  </div>
+                </details>
+              </td>
+            </tr>
+            """
+        )
+    dependency_table_rows = "".join(dependency_rows) or """
+      <tr>
+        <td colspan="10" class="muted">No dependencies match the current view.</td>
+      </tr>
+    """
+    new_dependency_open = " open" if show_new_dependency == "1" or dependency_error else ""
+    dependency_error_html = f'<div class="error">{escape(dependency_error)}</div>' if dependency_error else ""
+    edit_dependency_panel = ""
+    if edit_dependency is not None:
+        edit_dependency_type_options = "".join(
+            _select_option(value, value.replace("_", " ").title(), edit_dependency.dependency_type)
+            for value in DEPENDENCY_TYPES
+        )
+        edit_dependency_status_options = "".join(
+            _select_option(value, value.replace("_", " ").title(), edit_dependency.status)
+            for value in DEPENDENCY_STATUSES
+        )
+        edit_blocking_level_options = "".join(
+            _select_option(value, value.title(), edit_dependency.blocking_level)
+            for value in BLOCKING_LEVELS
+        )
+        edit_dependency_panel = f"""
+        <details id="edit-dependency" class="collapsible-panel" open>
+          <summary class="button secondary">Edit Dependency</summary>
+          <div class="collapsible-body">
+            <form method="post" action="/dependencies/{edit_dependency.id}/update">
+              <label for="edit-dependency-title">Title</label>
+              <input id="edit-dependency-title" name="title" required maxlength="200" value="{escape(edit_dependency.title)}">
+              <label for="edit-dependency-description">Description</label>
+              <textarea id="edit-dependency-description" name="description">{escape(edit_dependency.description or "")}</textarea>
+              <div class="compact-fields">
+                <div>
+                  <label for="edit-dependency-type">Type</label>
+                  <select id="edit-dependency-type" name="dependency_type">{edit_dependency_type_options}</select>
+                </div>
+                <div>
+                  <label for="edit-dependency-status">Status</label>
+                  <select id="edit-dependency-status" name="status">{edit_dependency_status_options}</select>
+                </div>
+                <div>
+                  <label for="edit-blocking-level">Blocking Level</label>
+                  <select id="edit-blocking-level" name="blocking_level">{edit_blocking_level_options}</select>
+                </div>
+                <div>
+                  <label for="edit-dependency-owner">Owner</label>
+                  <input id="edit-dependency-owner" name="owner" maxlength="120" value="{escape(edit_dependency.owner or "")}">
+                </div>
+                <div>
+                  <label for="edit-external-team">External Team</label>
+                  <input id="edit-external-team" name="external_team" maxlength="120" value="{escape(edit_dependency.external_team or "")}">
+                </div>
+                <div>
+                  <label for="edit-dependency-due-date">Due Date</label>
+                  <input id="edit-dependency-due-date" name="due_date" type="date" value="{escape(_format_date(edit_dependency.due_date))}">
+                </div>
+                <div>
+                  <label for="edit-last-confirmation-at">Last Confirmation</label>
+                  <input id="edit-last-confirmation-at" name="last_confirmation_at" type="datetime-local" value="{escape(edit_dependency.last_confirmation_at.strftime('%Y-%m-%dT%H:%M') if edit_dependency.last_confirmation_at else '')}">
+                </div>
+              </div>
+              <label for="edit-dependency-notes">Notes</label>
+              <textarea id="edit-dependency-notes" name="notes">{escape(edit_dependency.notes or "")}</textarea>
+              <div class="actions">
+                <button type="submit">Save Dependency</button>
+                <a class="button secondary" href="/programs/{program.id}/view">Cancel</a>
+              </div>
+            </form>
+          </div>
+        </details>
+        """
+
     placeholder_sections = "".join(
         f"""
         <section class="panel placeholder">
@@ -685,7 +911,7 @@ def program_detail(
           <div class="muted">Not implemented yet.</div>
         </section>
         """
-        for title in ("Risks", "Dependencies", "Decisions", "Notes")
+        for title in ("Risks", "Decisions", "Notes")
     )
     body = f"""
     <header>
@@ -807,6 +1033,102 @@ def program_detail(
           </tr>
         </thead>
         <tbody>{work_rows}</tbody>
+      </table>
+    </section>
+    <section class="panel">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <h2>Dependencies</h2>
+      </div>
+      <details id="new-dependency" class="collapsible-panel"{new_dependency_open}>
+        <summary class="button">New Dependency</summary>
+        <div class="collapsible-body">
+          {dependency_error_html}
+          <form method="post" action="/programs/{program.id}/dependencies/create">
+            <label for="dependency-title">Title</label>
+            <input id="dependency-title" name="title" required maxlength="200">
+            <label for="dependency-description">Description</label>
+            <textarea id="dependency-description" name="description"></textarea>
+            <div class="compact-fields">
+              <div>
+                <label for="dependency-type">Type</label>
+                <select id="dependency-type" name="dependency_type">{dependency_type_options}</select>
+              </div>
+              <div>
+                <label for="dependency-status">Status</label>
+                <select id="dependency-status" name="status">{dependency_status_options}</select>
+              </div>
+              <div>
+                <label for="blocking-level">Blocking Level</label>
+                <select id="blocking-level" name="blocking_level">{blocking_level_options}</select>
+              </div>
+              <div>
+                <label for="dependency-owner">Owner</label>
+                <input id="dependency-owner" name="owner" maxlength="120">
+              </div>
+              <div>
+                <label for="external-team">External Team</label>
+                <input id="external-team" name="external_team" maxlength="120">
+              </div>
+              <div>
+                <label for="dependency-due-date">Due Date</label>
+                <input id="dependency-due-date" name="due_date" type="date">
+              </div>
+              <div>
+                <label for="last-confirmation-at">Last Confirmation</label>
+                <input id="last-confirmation-at" name="last_confirmation_at" type="datetime-local">
+              </div>
+            </div>
+            <label for="dependency-notes">Notes</label>
+            <textarea id="dependency-notes" name="notes"></textarea>
+            <div class="actions">
+              <button type="submit">Create Dependency</button>
+            </div>
+          </form>
+        </div>
+      </details>
+      {edit_dependency_panel}
+      <form class="filters" method="get" action="/programs/{program.id}/view">
+        <div>
+          <label for="dependency_status_filter">Status</label>
+          <select id="dependency_status_filter" name="dependency_status_filter">{dependency_status_filter_options}</select>
+        </div>
+        <div>
+          <label for="dependency_type_filter">Type</label>
+          <select id="dependency_type_filter" name="dependency_type_filter">{dependency_type_filter_options}</select>
+        </div>
+        <div>
+          <label for="blocking_level_filter">Blocking Level</label>
+          <select id="blocking_level_filter" name="blocking_level_filter">{blocking_level_filter_options}</select>
+        </div>
+        <div>
+          <label for="dependency_owner_filter">Owner</label>
+          <select id="dependency_owner_filter" name="dependency_owner_filter">{dependency_owner_options}</select>
+        </div>
+        <div>
+          <label for="dependency_sort">Sort</label>
+          <select id="dependency_sort" name="dependency_sort">{dependency_sort_options}</select>
+        </div>
+        <div class="actions">
+          <button type="submit">Apply</button>
+          <a class="button secondary" href="/programs/{program.id}/view">Clear</a>
+        </div>
+      </form>
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Type</th>
+            <th>Blocking</th>
+            <th>Owner</th>
+            <th>External Team</th>
+            <th>Due Date</th>
+            <th>Confirmed</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>{dependency_table_rows}</tbody>
       </table>
     </section>
     <div class="placeholder-grid">
@@ -939,6 +1261,142 @@ def delete_work_item_from_ui(work_item_id: int, db: Session = Depends(get_db)) -
 
     program_id = work_item.program_id
     db.delete(work_item)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/programs/{program_id}/dependencies/create", include_in_schema=False)
+async def create_dependency_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    dependency_type = parsed.get("dependency_type", "team")
+    dependency_status = parsed.get("status", "open")
+    blocking_level = parsed.get("blocking_level", "medium")
+    if (
+        not title
+        or dependency_type not in DEPENDENCY_TYPES
+        or dependency_status not in DEPENDENCY_STATUSES
+        or blocking_level not in BLOCKING_LEVELS
+    ):
+        query = urlencode(
+            {
+                "show_new_dependency": "1",
+                "dependency_error": "Title, type, status, and blocking level are required.",
+            }
+        )
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-dependency",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    dependency = Dependency(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        dependency_type=dependency_type,
+        owner=parsed.get("owner", "").strip() or None,
+        external_team=parsed.get("external_team", "").strip() or None,
+        status=dependency_status,
+        blocking_level=blocking_level,
+        due_date=_parse_due_date(parsed.get("due_date", "")),
+        last_confirmation_at=_parse_optional_datetime(parsed.get("last_confirmation_at", "")),
+        notes=parsed.get("notes", "").strip() or None,
+    )
+    db.add(dependency)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/dependencies/{dependency_id}/update", include_in_schema=False)
+async def update_dependency_from_ui(
+    dependency_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    dependency = db.get(Dependency, dependency_id)
+    if dependency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dependency not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    dependency_type = parsed.get("dependency_type", dependency.dependency_type)
+    dependency_status = parsed.get("status", dependency.status)
+    blocking_level = parsed.get("blocking_level", dependency.blocking_level)
+    if (
+        title
+        and dependency_type in DEPENDENCY_TYPES
+        and dependency_status in DEPENDENCY_STATUSES
+        and blocking_level in BLOCKING_LEVELS
+    ):
+        dependency.title = title
+        dependency.description = parsed.get("description", "").strip() or None
+        dependency.dependency_type = dependency_type
+        dependency.owner = parsed.get("owner", "").strip() or None
+        dependency.external_team = parsed.get("external_team", "").strip() or None
+        dependency.status = dependency_status
+        dependency.blocking_level = blocking_level
+        dependency.due_date = _parse_due_date(parsed.get("due_date", ""))
+        dependency.last_confirmation_at = _parse_optional_datetime(parsed.get("last_confirmation_at", ""))
+        dependency.notes = parsed.get("notes", "").strip() or None
+        db.add(dependency)
+        db.commit()
+
+    return RedirectResponse(f"/programs/{dependency.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/dependencies/{dependency_id}/confirm-ui", include_in_schema=False)
+def confirm_dependency_from_ui(dependency_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    dependency = db.get(Dependency, dependency_id)
+    if dependency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dependency not found")
+
+    dependency.last_confirmation_at = datetime.now(timezone.utc)
+    db.add(dependency)
+    db.commit()
+    return RedirectResponse(f"/programs/{dependency.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/dependencies/{dependency_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_dependency_page(dependency_id: int, db: Session = Depends(get_db)) -> str:
+    dependency = db.get(Dependency, dependency_id)
+    if dependency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dependency not found")
+    body = f"""
+    <header>
+      <div>
+        <h1>Delete Dependency?</h1>
+        <div class="muted">{escape(dependency.title)}</div>
+      </div>
+      <a href="/programs/{dependency.program_id}/view">Back to Program</a>
+    </header>
+    <section class="panel">
+      <p>This removes the Dependency from the Program.</p>
+      <form method="post" action="/dependencies/{dependency.id}/delete">
+        <div class="actions">
+          <button class="danger" type="submit">Confirm Delete</button>
+          <a class="button secondary" href="/programs/{dependency.program_id}/view">Cancel</a>
+        </div>
+      </form>
+    </section>
+    """
+    return _page_shell("Delete Dependency", body)
+
+
+@router.post("/dependencies/{dependency_id}/delete", include_in_schema=False)
+def delete_dependency_from_ui(dependency_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    dependency = db.get(Dependency, dependency_id)
+    if dependency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dependency not found")
+
+    program_id = dependency.program_id
+    db.delete(dependency)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 

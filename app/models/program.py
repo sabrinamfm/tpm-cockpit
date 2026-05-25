@@ -36,3 +36,8 @@ class Program(Base):
         back_populates="program",
         cascade="all, delete-orphan",
     )
+    dependencies: Mapped[list["Dependency"]] = relationship(
+        "Dependency",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
