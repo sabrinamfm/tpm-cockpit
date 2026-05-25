@@ -1,22 +1,29 @@
 # TPM Cockpit — Codex Instructions
 
-## Project goal
-Build a local-first TPM Cockpit: a lightweight task/program workspace for Technical Program Managers.
+## Project Goal
 
-## Technical stack
+Build a local-first TPM Cockpit: a lightweight operational workspace for Technical Program Managers.
+
+The product should help TPMs manage programs, work items, risks, dependencies, decisions, stakeholders, notes, and reporting inputs.
+
+## Technical Stack
+
 Use Python.
 
 Initial stack:
-- FastAPI for the backend API
-- SQLite for local persistence
-- SQLAlchemy for database models
-- Alembic for migrations
-- Pytest for tests
 
-## Data safety rule
-Never commit real user/work data.
+- FastAPI
+- SQLite
+- SQLAlchemy
+- Alembic
+- Pytest
+
+## Data Safety
+
+Never commit real user or work data.
 
 The `data/` folder is ignored by Git and may contain:
+
 - cockpit.db
 - attachments/
 - exports/
@@ -24,22 +31,34 @@ The `data/` folder is ignored by Git and may contain:
 
 Use `sample_data/` for fake demo data only.
 
-## Phase 1 scope
-Implement:
-- Programs
-- Work items
-- Risks
-- Dependencies
-- Decisions
-- Stakeholders
-- Notes
+## Development Rules
 
-## Product principle
-This is not generic Jira. It is a TPM-native cockpit focused on coordination, attention, ambiguity, blockers, risks, dependencies, and reporting readiness.
-
-## Development rules
-- Make small commits.
-- Add tests for every core behavior.
+- Keep the app local-first.
 - Do not reset or delete the SQLite database.
 - Use Alembic migrations for schema changes.
 - Keep secrets in `.env`; never commit them.
+- Keep changes small and reviewable.
+- Add tests for core behavior.
+- Prefer simple, explicit code over clever abstractions.
+- Do not introduce cloud dependencies in Phase 1.
+
+## Product Principles
+
+TPM Cockpit is not generic project management software.
+
+Optimize for:
+
+- TPM workflows
+- operational visibility
+- coordination tracking
+- dependency awareness
+- risk visibility
+- decision memory
+- reporting readiness
+
+Avoid optimizing for:
+
+- sprint management
+- engineering backlog ownership
+- executive vanity dashboards
+- generic productivity workflows
