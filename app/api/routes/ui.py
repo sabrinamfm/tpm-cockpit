@@ -10,19 +10,21 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.domain.attention import dependency_is_stale, work_item_is_overdue, work_item_is_stale
+from app.domain.attention import dependency_is_stale, risk_is_critical, risk_is_stale, work_item_is_overdue, work_item_is_stale
 from app.domain.programs import program_attention_state
 from app.domain.queries import (
     get_blocked_dependencies,
     get_blocked_work_items,
     get_critical_dependencies,
+    get_critical_risks,
     get_overdue_work_items,
     get_programs_needing_attention,
     get_recently_updated_programs,
     get_stale_dependencies,
+    get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Dependency, Program, ProgramStatus, SourceType, WorkItem
+from app.models import Dependency, Program, ProgramStatus, Risk, SourceType, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -47,6 +49,18 @@ DEPENDENCY_STATUSES = ("open", "in_progress", "confirmed", "blocked", "resolved"
 BLOCKING_LEVELS = ("low", "medium", "high", "critical")
 BLOCKING_LEVEL_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 ATTENTION_STATES = ("Needs attention", "OK", "Inactive")
+RISK_STATUSES = ("open", "monitoring", "mitigated", "resolved", "accepted")
+RISK_SEVERITIES = ("low", "medium", "high", "critical")
+RISK_LIKELIHOODS = ("unlikely", "possible", "likely", "very_likely")
+RISK_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+RISK_LIKELIHOOD_RANK = {"very_likely": 0, "likely": 1, "possible": 2, "unlikely": 3}
+RISK_SORT_LABELS = {
+    "severity": "Severity",
+    "likelihood": "Likelihood",
+    "target_resolution_date": "Target Resolution",
+    "last_reviewed_at": "Last Reviewed",
+    "updated_at": "Updated",
+}
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
     "updated_at": Program.updated_at.desc(),
@@ -76,13 +90,19 @@ templates.env.globals.update(
         "work_item_is_overdue": work_item_is_overdue,
         "work_item_is_stale": work_item_is_stale,
         "dependency_is_stale": dependency_is_stale,
+        "risk_is_stale": risk_is_stale,
+        "risk_is_critical": risk_is_critical,
         "WORK_ITEM_STATUSES": WORK_ITEM_STATUSES,
         "WORK_ITEM_PRIORITIES": WORK_ITEM_PRIORITIES,
         "DEPENDENCY_TYPES": DEPENDENCY_TYPES,
         "DEPENDENCY_STATUSES": DEPENDENCY_STATUSES,
         "BLOCKING_LEVELS": BLOCKING_LEVELS,
+        "RISK_STATUSES": RISK_STATUSES,
+        "RISK_SEVERITIES": RISK_SEVERITIES,
+        "RISK_LIKELIHOODS": RISK_LIKELIHOODS,
         "WORK_ITEM_SORT_LABELS": WORK_ITEM_SORT_LABELS,
         "DEPENDENCY_SORT_LABELS": DEPENDENCY_SORT_LABELS,
+        "RISK_SORT_LABELS": RISK_SORT_LABELS,
         "ATTENTION_STATES": ATTENTION_STATES,
     }
 )
@@ -290,6 +310,18 @@ def _dependency_sort_key(dependency: Dependency, sort: str):
     return (dependency.updated_at, dependency.id)
 
 
+def _risk_sort_key(risk: Risk, sort: str):
+    if sort == "severity":
+        return (RISK_SEVERITY_RANK.get(risk.severity, 99), risk.id)
+    if sort == "likelihood":
+        return (RISK_LIKELIHOOD_RANK.get(risk.likelihood, 99), risk.id)
+    if sort == "target_resolution_date":
+        return (risk.target_resolution_date or date.max, risk.id)
+    if sort == "last_reviewed_at":
+        return (risk.last_reviewed_at or datetime.min, risk.id)
+    return (risk.updated_at, risk.id)
+
+
 @router.get("/programs/{program_id}/view", response_class=HTMLResponse, include_in_schema=False)
 def program_detail(
     request: Request,
@@ -311,6 +343,14 @@ def program_detail(
     show_new_dependency: Optional[str] = None,
     dependency_error: Optional[str] = None,
     edit_dependency_id: Optional[int] = None,
+    risk_status_filter: Optional[str] = None,
+    risk_severity_filter: Optional[str] = None,
+    risk_likelihood_filter: Optional[str] = None,
+    risk_owner_filter: Optional[str] = None,
+    risk_sort: str = "updated_at",
+    show_new_risk: Optional[str] = None,
+    risk_error: Optional[str] = None,
+    edit_risk_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     program = db.scalars(
@@ -318,6 +358,7 @@ def program_detail(
         .options(
             selectinload(Program.work_items).selectinload(WorkItem.source_type),
             selectinload(Program.dependencies),
+            selectinload(Program.risks),
         )
         .where(Program.id == program_id)
     ).one_or_none()
@@ -341,6 +382,14 @@ def program_detail(
         blocking_level_filter = None
     if dependency_sort not in DEPENDENCY_SORT_LABELS:
         dependency_sort = "updated_at"
+    if risk_status_filter and risk_status_filter not in RISK_STATUSES:
+        risk_status_filter = None
+    if risk_severity_filter and risk_severity_filter not in RISK_SEVERITIES:
+        risk_severity_filter = None
+    if risk_likelihood_filter and risk_likelihood_filter not in RISK_LIKELIHOODS:
+        risk_likelihood_filter = None
+    if risk_sort not in RISK_SORT_LABELS:
+        risk_sort = "updated_at"
 
     work_items = list(program.work_items)
     if work_status_filter:
@@ -375,6 +424,18 @@ def program_detail(
         reverse=dependency_reverse,
     )
 
+    risks = list(program.risks)
+    if risk_status_filter:
+        risks = [r for r in risks if r.status == risk_status_filter]
+    if risk_severity_filter:
+        risks = [r for r in risks if r.severity == risk_severity_filter]
+    if risk_likelihood_filter:
+        risks = [r for r in risks if r.likelihood == risk_likelihood_filter]
+    if risk_owner_filter:
+        risks = [r for r in risks if r.owner == risk_owner_filter]
+    risk_reverse = risk_sort == "updated_at"
+    risks = sorted(risks, key=lambda r: _risk_sort_key(r, risk_sort), reverse=risk_reverse)
+
     edit_work_item = None
     if edit_work_item_id is not None:
         edit_work_item = next(
@@ -388,8 +449,16 @@ def program_detail(
             None,
         )
 
+    edit_risk = None
+    if edit_risk_id is not None:
+        edit_risk = next(
+            (r for r in program.risks if r.id == edit_risk_id),
+            None,
+        )
+
     work_owners = sorted({item.owner for item in program.work_items if item.owner})
     dep_owners = sorted({item.owner for item in program.dependencies if item.owner})
+    risk_owners = sorted({r.owner for r in program.risks if r.owner})
 
     return templates.TemplateResponse(
         request,
@@ -418,6 +487,16 @@ def program_detail(
             "dependency_error": dependency_error,
             "edit_dependency": edit_dependency,
             "dep_owners": dep_owners,
+            "risks": risks,
+            "risk_status_filter": risk_status_filter,
+            "risk_severity_filter": risk_severity_filter,
+            "risk_likelihood_filter": risk_likelihood_filter,
+            "risk_owner_filter": risk_owner_filter,
+            "risk_sort": risk_sort,
+            "show_new_risk": show_new_risk,
+            "risk_error": risk_error,
+            "edit_risk": edit_risk,
+            "risk_owners": risk_owners,
         },
     )
 
@@ -677,6 +756,136 @@ def delete_dependency_from_ui(dependency_id: int, db: Session = Depends(get_db))
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
+# ── Risk UI handlers ─────────────────────────────────────────────────────────
+
+@router.post("/programs/{program_id}/risks/create", include_in_schema=False)
+async def create_risk_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    risk_status = parsed.get("status", "open")
+    severity = parsed.get("severity", "medium")
+    likelihood = parsed.get("likelihood", "possible")
+    if (
+        not title
+        or risk_status not in RISK_STATUSES
+        or severity not in RISK_SEVERITIES
+        or likelihood not in RISK_LIKELIHOODS
+    ):
+        query = urlencode(
+            {
+                "show_new_risk": "1",
+                "risk_error": "Title, status, severity, and likelihood are required.",
+            }
+        )
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-risk",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    risk = Risk(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        severity=severity,
+        likelihood=likelihood,
+        status=risk_status,
+        owner=parsed.get("owner", "").strip() or None,
+        mitigation=parsed.get("mitigation", "").strip() or None,
+        target_resolution_date=_parse_due_date(parsed.get("target_resolution_date", "")),
+    )
+    db.add(risk)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/risks/{risk_id}/update", include_in_schema=False)
+async def update_risk_from_ui(
+    risk_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    risk_status = parsed.get("status", risk.status)
+    severity = parsed.get("severity", risk.severity)
+    likelihood = parsed.get("likelihood", risk.likelihood)
+    if (
+        title
+        and risk_status in RISK_STATUSES
+        and severity in RISK_SEVERITIES
+        and likelihood in RISK_LIKELIHOODS
+    ):
+        risk.title = title
+        risk.description = parsed.get("description", "").strip() or None
+        risk.severity = severity
+        risk.likelihood = likelihood
+        risk.status = risk_status
+        risk.owner = parsed.get("owner", "").strip() or None
+        risk.mitigation = parsed.get("mitigation", "").strip() or None
+        risk.target_resolution_date = _parse_due_date(parsed.get("target_resolution_date", ""))
+        db.add(risk)
+        db.commit()
+
+    return RedirectResponse(f"/programs/{risk.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/risks/{risk_id}/review-ui", include_in_schema=False)
+def review_risk_from_ui(risk_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+
+    risk.last_reviewed_at = datetime.now(timezone.utc)
+    db.add(risk)
+    db.commit()
+    return RedirectResponse(f"/programs/{risk.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/risks/{risk_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_risk_page(
+    request: Request, risk_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "page_title": "Delete Risk?",
+            "subtitle": risk.title,
+            "back_url": f"/programs/{risk.program_id}/view",
+            "back_label": "Back to Program",
+            "message": "This removes the Risk from the Program.",
+            "action_url": f"/risks/{risk.id}/delete",
+            "cancel_url": f"/programs/{risk.program_id}/view",
+        },
+    )
+
+
+@router.post("/risks/{risk_id}/delete", include_in_schema=False)
+def delete_risk_from_ui(risk_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+
+    program_id = risk.program_id
+    db.delete(risk)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # ── Unified Settings page ──────────────────────────────────────────────────────
 
 @router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
@@ -874,6 +1083,8 @@ def morning_view(request: Request, db: Session = Depends(get_db)) -> HTMLRespons
             "stale_work_items": get_stale_work_items(db),
             "critical_dependencies": get_critical_dependencies(db),
             "stale_dependencies": get_stale_dependencies(db),
+            "critical_risks": get_critical_risks(db),
+            "stale_risks": get_stale_risks(db),
             "recently_updated_programs": get_recently_updated_programs(db),
         },
     )

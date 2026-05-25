@@ -511,8 +511,224 @@
   </table>
 </section>
 
+<section class="panel">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h2>Risks</h2>
+  </div>
+
+  <details id="new-risk" class="collapsible-panel"{% if show_new_risk == "1" or risk_error %} open{% endif %}>
+    <summary class="button">New Risk</summary>
+    <div class="collapsible-body">
+      {% if risk_error %}<div class="error">{{ risk_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/risks/create">
+        <label for="risk-title">Title</label>
+        <input id="risk-title" name="title" required maxlength="200">
+        <label for="risk-description">Description</label>
+        <textarea id="risk-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="risk-severity">Severity</label>
+            <select id="risk-severity" name="severity">
+              {% for s in RISK_SEVERITIES %}
+                <option value="{{ s }}"{% if s == "medium" %} selected{% endif %}>{{ s | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="risk-likelihood">Likelihood</label>
+            <select id="risk-likelihood" name="likelihood">
+              {% for l in RISK_LIKELIHOODS %}
+                <option value="{{ l }}"{% if l == "possible" %} selected{% endif %}>{{ l | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="risk-status">Status</label>
+            <select id="risk-status" name="status">
+              {% for rs in RISK_STATUSES %}
+                <option value="{{ rs }}">{{ rs | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="risk-owner">Owner</label>
+            <input id="risk-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="risk-target">Target Resolution</label>
+            <input id="risk-target" name="target_resolution_date" type="date">
+          </div>
+        </div>
+        <label for="risk-mitigation">Mitigation</label>
+        <textarea id="risk-mitigation" name="mitigation"></textarea>
+        <div class="actions">
+          <button type="submit">Create Risk</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_risk %}
+  <details id="edit-risk" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Risk</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/risks/{{ edit_risk.id }}/update">
+        <label for="edit-risk-title">Title</label>
+        <input id="edit-risk-title" name="title" required maxlength="200" value="{{ edit_risk.title }}">
+        <label for="edit-risk-description">Description</label>
+        <textarea id="edit-risk-description" name="description">{{ edit_risk.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-risk-severity">Severity</label>
+            <select id="edit-risk-severity" name="severity">
+              {% for s in RISK_SEVERITIES %}
+                <option value="{{ s }}"{% if s == edit_risk.severity %} selected{% endif %}>{{ s | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-risk-likelihood">Likelihood</label>
+            <select id="edit-risk-likelihood" name="likelihood">
+              {% for l in RISK_LIKELIHOODS %}
+                <option value="{{ l }}"{% if l == edit_risk.likelihood %} selected{% endif %}>{{ l | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-risk-status">Status</label>
+            <select id="edit-risk-status" name="status">
+              {% for rs in RISK_STATUSES %}
+                <option value="{{ rs }}"{% if rs == edit_risk.status %} selected{% endif %}>{{ rs | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-risk-owner">Owner</label>
+            <input id="edit-risk-owner" name="owner" maxlength="120" value="{{ edit_risk.owner or '' }}">
+          </div>
+          <div>
+            <label for="edit-risk-target">Target Resolution</label>
+            <input id="edit-risk-target" name="target_resolution_date" type="date" value="{{ edit_risk.target_resolution_date | format_date }}">
+          </div>
+        </div>
+        <label for="edit-risk-mitigation">Mitigation</label>
+        <textarea id="edit-risk-mitigation" name="mitigation">{{ edit_risk.mitigation or "" }}</textarea>
+        <div class="actions">
+          <button type="submit">Save Risk</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="risk_status_filter">Status</label>
+      <select id="risk_status_filter" name="risk_status_filter">
+        <option value="">All statuses</option>
+        {% for rs in RISK_STATUSES %}
+          <option value="{{ rs }}"{% if rs == risk_status_filter %} selected{% endif %}>{{ rs | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="risk_severity_filter">Severity</label>
+      <select id="risk_severity_filter" name="risk_severity_filter">
+        <option value="">All severities</option>
+        {% for s in RISK_SEVERITIES %}
+          <option value="{{ s }}"{% if s == risk_severity_filter %} selected{% endif %}>{{ s | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="risk_likelihood_filter">Likelihood</label>
+      <select id="risk_likelihood_filter" name="risk_likelihood_filter">
+        <option value="">All likelihoods</option>
+        {% for l in RISK_LIKELIHOODS %}
+          <option value="{{ l }}"{% if l == risk_likelihood_filter %} selected{% endif %}>{{ l | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="risk_owner_filter">Owner</label>
+      <select id="risk_owner_filter" name="risk_owner_filter">
+        <option value="">All owners</option>
+        {% for owner in risk_owners %}
+          <option value="{{ owner }}"{% if owner == risk_owner_filter %} selected{% endif %}>{{ owner }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="risk_sort">Sort</label>
+      <select id="risk_sort" name="risk_sort">
+        {% for value, label in RISK_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == risk_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Severity</th>
+        <th>Likelihood</th>
+        <th>Owner</th>
+        <th>Target Resolution</th>
+        <th>Last Reviewed</th>
+        <th>Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for risk in risks %}
+        {% set is_critical = risk_is_critical(risk) %}
+        {% set is_stale = risk_is_stale(risk) %}
+        {% set row_class = "critical-row" if is_critical else "stale-row" if is_stale else "" %}
+        <tr class="{{ row_class }}">
+          <td>
+            {{ risk.title }}
+            {% if is_critical %}<span class="pill attention">Critical</span>{% endif %}
+            {% if is_stale %}<span class="pill attention">Stale</span>{% endif %}
+          </td>
+          <td><span class="pill">{{ risk.status }}</span></td>
+          <td><span class="pill">{{ risk.severity }}</span></td>
+          <td>{{ risk.likelihood | replace('_', ' ') | title }}</td>
+          <td>{{ risk.owner or "" }}</td>
+          <td>{{ risk.target_resolution_date | format_date }}</td>
+          <td>{{ risk.last_reviewed_at | format_datetime }}</td>
+          <td>{{ risk.updated_at | format_datetime }}</td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_risk_id={{ risk.id }}#edit-risk">Edit</a>
+                <form method="post" action="/risks/{{ risk.id }}/review-ui">
+                  <button type="submit">Mark Reviewed</button>
+                </form>
+                <a href="/risks/{{ risk.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="9" class="muted">No risks match the current view.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
 <div class="placeholder-grid">
-  {% for title in ["Risks", "Decisions", "Notes"] %}
+  {% for title in ["Decisions", "Notes"] %}
     <section class="panel placeholder">
       <h3>{{ title }}</h3>
       <div class="muted">Not implemented yet.</div>

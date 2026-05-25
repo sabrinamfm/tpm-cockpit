@@ -3,6 +3,7 @@ from typing import Optional, Protocol
 
 WORK_ITEM_STALE_DAYS = 7
 DEPENDENCY_STALE_DAYS = 14
+RISK_STALE_DAYS = 14
 
 
 class WorkItemLike(Protocol):
@@ -14,6 +15,12 @@ class WorkItemLike(Protocol):
 class DependencyLike(Protocol):
     status: str
     last_confirmation_at: Optional[datetime]
+
+
+class RiskLike(Protocol):
+    status: str
+    severity: str
+    last_reviewed_at: Optional[datetime]
 
 
 class ProgramStatusLike(Protocol):
@@ -54,6 +61,22 @@ def dependency_is_stale(dep: DependencyLike, now: Optional[datetime] = None) -> 
     if last_confirmed.tzinfo is None:
         last_confirmed = last_confirmed.replace(tzinfo=timezone.utc)
     return last_confirmed < current - timedelta(days=DEPENDENCY_STALE_DAYS)
+
+
+def risk_is_stale(risk: RiskLike, now: Optional[datetime] = None) -> bool:
+    if risk.status in ("resolved", "accepted"):
+        return False
+    if risk.last_reviewed_at is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    last_reviewed = risk.last_reviewed_at
+    if last_reviewed.tzinfo is None:
+        last_reviewed = last_reviewed.replace(tzinfo=timezone.utc)
+    return last_reviewed < current - timedelta(days=RISK_STALE_DAYS)
+
+
+def risk_is_critical(risk: RiskLike) -> bool:
+    return risk.severity in ("high", "critical") and risk.status not in ("resolved", "accepted")
 
 
 def program_needs_attention(program: ProgramLike, now: Optional[datetime] = None) -> bool:

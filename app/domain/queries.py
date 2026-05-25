@@ -4,10 +4,11 @@ from typing import Optional
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.domain.attention import DEPENDENCY_STALE_DAYS, WORK_ITEM_STALE_DAYS
+from app.domain.attention import DEPENDENCY_STALE_DAYS, RISK_STALE_DAYS, WORK_ITEM_STALE_DAYS
 from app.models.dependency import Dependency
 from app.models.program import Program
 from app.models.program_status import ProgramStatus
+from app.models.risk import Risk
 from app.models.work_item import WorkItem
 
 
@@ -19,6 +20,7 @@ def _operational_program_ids():
 
 _TERMINAL_WORK = ("completed", "cancelled")
 _TERMINAL_DEP = ("resolved", "cancelled")
+_TERMINAL_RISK = ("resolved", "accepted")
 
 
 def get_blocked_work_items(db: Session) -> list[WorkItem]:
@@ -110,6 +112,38 @@ def get_stale_dependencies(db: Session, now: Optional[datetime] = None) -> list[
                 Dependency.status.not_in(_TERMINAL_DEP),
             )
             .order_by(Dependency.last_confirmation_at.asc())
+        )
+    )
+
+
+def get_critical_risks(db: Session) -> list[Risk]:
+    return list(
+        db.scalars(
+            select(Risk)
+            .options(selectinload(Risk.program))
+            .where(
+                Risk.program_id.in_(_operational_program_ids()),
+                Risk.severity.in_(("high", "critical")),
+                Risk.status.not_in(_TERMINAL_RISK),
+            )
+            .order_by(Risk.updated_at.desc())
+        )
+    )
+
+
+def get_stale_risks(db: Session, now: Optional[datetime] = None) -> list[Risk]:
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=RISK_STALE_DAYS)
+    return list(
+        db.scalars(
+            select(Risk)
+            .options(selectinload(Risk.program))
+            .where(
+                Risk.program_id.in_(_operational_program_ids()),
+                Risk.last_reviewed_at.is_not(None),
+                Risk.last_reviewed_at < cutoff,
+                Risk.status.not_in(_TERMINAL_RISK),
+            )
+            .order_by(Risk.last_reviewed_at.asc())
         )
     )
 

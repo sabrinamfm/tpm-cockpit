@@ -46,6 +46,11 @@ class Program(Base):
         back_populates="program",
         cascade="all, delete-orphan",
     )
+    risks: Mapped[list["Risk"]] = relationship(
+        "Risk",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def status(self) -> str:

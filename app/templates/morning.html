@@ -173,6 +173,55 @@
 </section>
 
 <section class="morning-section">
+  <h2>Critical Risks <span class="section-count">({{ critical_risks|length }})</span></h2>
+  {% if critical_risks %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Severity</th><th>Likelihood</th><th>Status</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for risk in critical_risks %}
+      <tr class="critical-row">
+        <td><a href="/programs/{{ risk.program_id }}/view">{{ risk.program.name }}</a></td>
+        <td>{{ risk.title }}</td>
+        <td>{{ risk.severity }}</td>
+        <td>{{ risk.likelihood | replace('_', ' ') | title }}</td>
+        <td>{{ risk.status }}</td>
+        <td class="muted">{{ risk.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Stale Risks <span class="section-count">({{ stale_risks|length }})</span></h2>
+  {% if stale_risks %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Severity</th><th>Last Reviewed</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for risk in stale_risks %}
+      <tr class="stale-row">
+        <td><a href="/programs/{{ risk.program_id }}/view">{{ risk.program.name }}</a></td>
+        <td>{{ risk.title }}</td>
+        <td>{{ risk.severity }}</td>
+        <td class="muted">{{ risk.last_reviewed_at | format_datetime }}</td>
+        <td class="muted">{{ risk.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
   <h2>Recently Updated Programs</h2>
   {% if recently_updated_programs %}
   <table>
