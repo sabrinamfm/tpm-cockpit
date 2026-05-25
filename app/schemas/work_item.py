@@ -11,6 +11,8 @@ class WorkItemBase(BaseModel):
     description: Optional[str] = None
     status: WorkItemStatus = "open"
     owner: Optional[str] = Field(default=None, max_length=120)
+    source_type_id: Optional[int] = None
+    link: Optional[str] = Field(default=None, max_length=500)
     due_date: Optional[date] = None
 
 
@@ -23,6 +25,8 @@ class WorkItemUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[WorkItemStatus] = None
     owner: Optional[str] = Field(default=None, max_length=120)
+    source_type_id: Optional[int] = None
+    link: Optional[str] = Field(default=None, max_length=500)
     due_date: Optional[date] = None
 
 

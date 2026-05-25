@@ -1,14 +1,22 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Program, WorkItem
+from app.models import Program, SourceType, WorkItem
 from app.schemas.work_item import WorkItemCreate, WorkItemRead, WorkItemUpdate
 
 router = APIRouter(tags=["work items"])
+
+
+def _validate_source_type(source_type_id: Optional[int], db: Session) -> None:
+    if source_type_id is None:
+        return
+    source_type = db.get(SourceType, source_type_id)
+    if source_type is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source type not found")
 
 
 @router.post(
@@ -24,6 +32,7 @@ def create_work_item(
     program = db.get(Program, program_id)
     if program is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+    _validate_source_type(work_item_in.source_type_id, db)
 
     work_item = WorkItem(program_id=program_id, **work_item_in.model_dump())
     db.add(work_item)
@@ -63,6 +72,8 @@ def update_work_item(
     work_item = db.get(WorkItem, work_item_id)
     if work_item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+    if "source_type_id" in work_item_in.model_fields_set:
+        _validate_source_type(work_item_in.source_type_id, db)
 
     for field, value in work_item_in.model_dump(exclude_unset=True).items():
         setattr(work_item, field, value)

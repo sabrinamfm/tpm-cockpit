@@ -26,6 +26,12 @@ class WorkItem(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="open")
     owner: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    source_type_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("source_types.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -40,3 +46,4 @@ class WorkItem(Base):
     )
 
     program = relationship("Program", back_populates="work_items")
+    source_type = relationship("SourceType", back_populates="work_items")

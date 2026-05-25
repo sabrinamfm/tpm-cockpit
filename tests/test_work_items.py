@@ -1,5 +1,6 @@
 def test_create_work_item(client) -> None:
     program = client.post("/programs", json={"name": "Launch Readiness"}).json()
+    source_type = client.post("/source-types", json={"name": "Email"}).json()
 
     response = client.post(
         f"/programs/{program['id']}/work-items",
@@ -8,6 +9,8 @@ def test_create_work_item(client) -> None:
             "description": "Collect readiness signals.",
             "status": "open",
             "owner": "Sabrina",
+            "source_type_id": source_type["id"],
+            "link": "https://example.com/readiness",
             "due_date": "2026-06-01",
         },
     )
@@ -19,6 +22,8 @@ def test_create_work_item(client) -> None:
     assert data["description"] == "Collect readiness signals."
     assert data["status"] == "open"
     assert data["owner"] == "Sabrina"
+    assert data["source_type_id"] == source_type["id"]
+    assert data["link"] == "https://example.com/readiness"
     assert data["due_date"] == "2026-06-01"
 
 
@@ -71,3 +76,14 @@ def test_rejects_invalid_work_item_status(client) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_rejects_missing_source_type_for_work_item(client) -> None:
+    program = client.post("/programs", json={"name": "Source Validation"}).json()
+
+    response = client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Missing source", "source_type_id": 999},
+    )
+
+    assert response.status_code == 404

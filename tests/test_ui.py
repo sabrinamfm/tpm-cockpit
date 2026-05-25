@@ -7,6 +7,7 @@ def test_program_ui_loads(client) -> None:
     assert "Attention" in response.text
     assert "All statuses" in response.text
     assert "All attention states" in response.text
+    assert "Actions" in response.text
 
 
 def test_program_ui_links_to_detail_page(client) -> None:
@@ -41,6 +42,18 @@ def test_program_ui_filters_by_status(client) -> None:
     assert "Active Program" not in response.text
 
 
+def test_program_delete_requires_confirmation_page(client) -> None:
+    program = client.post("/programs", json={"name": "Confirm Me"}).json()
+
+    list_response = client.get("/")
+    confirm_response = client.get(f"/programs/{program['id']}/delete/confirm")
+
+    assert list_response.status_code == 200
+    assert f"/programs/{program['id']}/delete/confirm" in list_response.text
+    assert confirm_response.status_code == 200
+    assert "Confirm Delete" in confirm_response.text
+
+
 def test_program_detail_page_shows_work_items_grouped_by_status(client) -> None:
     program = client.post("/programs", json={"name": "Program With Work"}).json()
     client.post(
@@ -55,8 +68,8 @@ def test_program_detail_page_shows_work_items_grouped_by_status(client) -> None:
     response = client.get(f"/programs/{program['id']}/view")
 
     assert response.status_code == 200
-    assert "Open" in response.text
-    assert "Blocked" in response.text
+    assert "<th>Title</th>" in response.text
+    assert "<th>Source Type</th>" in response.text
     assert "Open item" in response.text
     assert "Blocked item" in response.text
     assert "Create Work Item" in response.text
@@ -74,3 +87,43 @@ def test_program_list_shows_attention_from_blocked_work_item(client) -> None:
     assert response.status_code == 200
     assert "Needs Follow Up" in response.text
     assert "Needs attention" in response.text
+
+
+def test_work_item_ui_filters_by_owner_and_source_type(client) -> None:
+    program = client.post("/programs", json={"name": "Filter Work"}).json()
+    email = client.post("/source-types", json={"name": "Email"}).json()
+    meeting = client.post("/source-types", json={"name": "Meeting"}).json()
+    client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Email item", "owner": "Sabrina", "source_type_id": email["id"]},
+    )
+    client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Meeting item", "owner": "Ada", "source_type_id": meeting["id"]},
+    )
+
+    response = client.get(
+        f"/programs/{program['id']}/view?owner_filter=Sabrina&source_type_filter={email['id']}"
+    )
+
+    assert response.status_code == 200
+    assert "Email item" in response.text
+    assert "Meeting item" not in response.text
+
+
+def test_work_item_ui_sort_control_and_delete_confirmation(client) -> None:
+    program = client.post("/programs", json={"name": "Sort Work"}).json()
+    work_item = client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Sortable item", "link": "https://example.com/source"},
+    ).json()
+
+    detail_response = client.get(f"/programs/{program['id']}/view?work_sort=title")
+    confirm_response = client.get(f"/work-items/{work_item['id']}/delete/confirm")
+
+    assert detail_response.status_code == 200
+    assert "Sortable item" in detail_response.text
+    assert "https://example.com/source" in detail_response.text
+    assert f"/work-items/{work_item['id']}/delete/confirm" in detail_response.text
+    assert confirm_response.status_code == 200
+    assert "Confirm Delete" in confirm_response.text
