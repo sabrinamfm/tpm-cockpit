@@ -1,11 +1,23 @@
 # Core Objects
 
 ## Implemented
+- Program
+- Work Item
+- Dependency
+- Program Status
+- Source Type
 
-### Program
+## Planned
+- Risk
+- Decision
+- Note
+- Stakeholder
+- Update/Activity
+
+## Program
 Represents an operational initiative or execution scope.
 
-### Work Item
+## Work Item
 Represents actionable operational work.
 
 Not limited to engineering tasks.
@@ -18,15 +30,13 @@ Can represent:
 - follow-ups
 - operational actions
 
-## Planned
-
-### Risk
+## Risk
 Represents identified uncertainty with potential delivery or operational impact.
 
-### Dependency
+## Dependency
 Represents reliance on another team, system, decision, vendor, or process.
 
-### Decision
+## Decision
 Represents a meaningful operational or strategic choice.
 
 Must preserve:
@@ -36,11 +46,11 @@ Must preserve:
 - timestamp
 - stakeholders
 
-### Stakeholder
+## Stakeholder
 Represents individuals, teams, organizations, or external actors involved in execution.
 
-### Update
+## Update
 Represents operational state communication.
 
-### Note
+## Note
 Represents unstructured operational context.

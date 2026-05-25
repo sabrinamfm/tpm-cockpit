@@ -150,3 +150,25 @@
   4. Attention model doc lists signals that are not yet wired into program_attention_state (staleness, dependency staleness, ownership).
   5. ondelete="RESTRICT" in Program model is not reflected in migration 0008's create_foreign_key call — behavioral gap between model declaration and actual DB schema.
   6. seed_default_program_statuses called at request time is an architectural pattern not mentioned anywhere — it could surprise a reader expecting migration-only seeding.
+
+  ---
+ Current Product Maturity
+ 
+ The product is currently transitioning from:
+ - object management
+ to:
+ - operational coordination visibility
+ 
+ Implemented operational semantics:
+ - blocked work detection
+ - overdue work detection
+ - stale work detection
+ - stale dependency detection
+ - critical dependency visibility
+ - Morning View operational overview
+ 
+ The product is not yet:
+ - an analytics platform
+ - an executive reporting system
+ - a multi-user collaboration system
+ - AI-driven
