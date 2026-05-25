@@ -48,7 +48,11 @@ Avoid:
 - no React unless explicitly needed
 
 ## Current Product Model
-Program
+Program 
+→ Work Items
+
+## Planned Product Model
+Program 
 → Work Items
 → Risks
 → Dependencies

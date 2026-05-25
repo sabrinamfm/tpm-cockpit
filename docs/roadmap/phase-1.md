@@ -10,14 +10,14 @@ Phase 1 is not about automation or advanced intelligence. It is about creating a
 
 Phase 1 includes:
 
-- Create and manage programs
-- Create and manage work items
+- Create and manage programs (implemented, needs improvement)
+- Create and manage work items (implemented, needs improvement)
 - Track risks
 - Track dependencies
 - Track decisions
 - Track stakeholders
 - Add notes to programs
-- Preserve data locally
+- Preserve data locally (partially implemented, only programs and work items)
 - Prepare the foundation for future reports
 
 ## Out of Scope
