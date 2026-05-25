@@ -207,6 +207,15 @@ def _page_shell(title: str, body: str) -> str:
     .detail-grid {{ display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }}
     .placeholder-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; }}
     .placeholder {{ min-height: 86px; }}
+    .settings-nav {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }}
+    .settings-nav a {{ display: inline-block; padding: 6px 14px; border-radius: 6px; background: #e7ebf1; color: #243043; font-size: 13px; font-weight: 600; text-decoration: none; }}
+    .settings-nav a:hover {{ background: #d9dee7; }}
+    .settings-section {{ margin-bottom: 40px; }}
+    .settings-section-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }}
+    .settings-section-header h2 {{ margin: 0; }}
+    details.create-panel > summary {{ list-style: none; cursor: pointer; }}
+    details.create-panel > summary::-webkit-details-marker {{ display: none; }}
+    details.create-panel > .panel {{ margin-top: 10px; }}
     .compact-fields {{ display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 8px; }}
     .collapsible-panel {{
       margin-bottom: 16px;
@@ -325,7 +334,7 @@ def program_ui(
         <div class="muted">Programs workspace</div>
       </div>
       <div class="top-links">
-        <a href="/settings/program-statuses">Settings</a>
+        <a href="/settings">Settings</a>
         <a href="/docs">API docs</a>
       </div>
     </header>
@@ -947,7 +956,7 @@ def program_detail(
       </div>
       <div class="top-links">
         <a href="/">Back to Programs</a>
-        <a href="/settings/program-statuses">Settings</a>
+        <a href="/settings">Settings</a>
       </div>
     </header>
     <section class="panel">
@@ -1427,109 +1436,20 @@ def delete_dependency_from_ui(dependency_id: int, db: Session = Depends(get_db))
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.get("/settings/source-types", response_class=HTMLResponse, include_in_schema=False)
-def source_type_settings(db: Session = Depends(get_db)) -> str:
-    source_types = list(db.scalars(select(SourceType).order_by(SourceType.name.asc())))
-    rows = []
-    for source_type in source_types:
-        action = "Deactivate" if source_type.is_active else "Reactivate"
-        action_path = "deactivate" if source_type.is_active else "activate"
-        status_label = "Active" if source_type.is_active else "Inactive"
-        rows.append(
-            f"""
-            <tr>
-              <td>{escape(source_type.name)}</td>
-              <td><span class="pill">{status_label}</span></td>
-              <td>{escape(_format_datetime(source_type.updated_at))}</td>
-              <td>
-                <form method="post" action="/settings/source-types/{source_type.id}/{action_path}">
-                  <button class="secondary" type="submit">{action}</button>
-                </form>
-              </td>
-            </tr>
-            """
-        )
-    body = f"""
-    <header>
-      <div>
-        <h1>Settings</h1>
-        <div class="muted">Work Item source types</div>
-      </div>
-      <a href="/">Back to Programs</a>
-    </header>
-    <div class="layout">
-      <section class="panel">
-        <h2>New Source Type</h2>
-        <form method="post" action="/settings/source-types/create">
-          <label for="name">Name</label>
-          <input id="name" name="name" required maxlength="120">
-          <div class="actions">
-            <button type="submit">Create Source Type</button>
-          </div>
-        </form>
-      </section>
-      <section class="panel">
-        <h2>Source Types</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Updated</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>{''.join(rows) or '<tr><td colspan="4" class="muted">No source types yet.</td></tr>'}</tbody>
-        </table>
-      </section>
-    </div>
-    """
-    return _page_shell("Settings", body)
+# ── Unified Settings page ──────────────────────────────────────────────────────
 
-
-@router.post("/settings/source-types/create", include_in_schema=False)
-async def create_source_type_from_ui(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
-    parsed = await _parse_form(request)
-    name = parsed.get("name", "").strip()
-    if name:
-        db.add(SourceType(name=name))
-        db.commit()
-    return RedirectResponse("/settings/source-types", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post("/settings/source-types/{source_type_id}/deactivate", include_in_schema=False)
-def deactivate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
-    source_type = db.get(SourceType, source_type_id)
-    if source_type is not None:
-        source_type.is_active = False
-        db.add(source_type)
-        db.commit()
-    return RedirectResponse("/settings/source-types", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post("/settings/source-types/{source_type_id}/activate", include_in_schema=False)
-def activate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
-    source_type = db.get(SourceType, source_type_id)
-    if source_type is not None:
-        source_type.is_active = True
-        db.add(source_type)
-        db.commit()
-    return RedirectResponse("/settings/source-types", status_code=status.HTTP_303_SEE_OTHER)
-
-
-# ── Program Status Settings ────────────────────────────────────────────────────
-
-@router.get("/settings/program-statuses", response_class=HTMLResponse, include_in_schema=False)
-def program_status_settings(
+@router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
+def settings_page(
     edit_status_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ) -> str:
     seed_default_program_statuses(db)
+
+    # ── Program Statuses section ──────────────────────────────────────────────
     all_statuses = list(
         db.scalars(select(ProgramStatus).order_by(ProgramStatus.sort_order.asc(), ProgramStatus.id.asc()))
     )
-
-    rows = []
+    status_rows = []
     for ps in all_statuses:
         is_editing = edit_status_id == ps.id
         active_label = "Active" if ps.is_active else "Inactive"
@@ -1539,7 +1459,7 @@ def program_status_settings(
         color_swatch = f'<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{escape(ps.color)};vertical-align:middle;margin-right:6px"></span>'
 
         if is_editing:
-            edit_form = f"""
+            status_rows.append(f"""
             <tr>
               <td colspan="6">
                 <form method="post" action="/settings/program-statuses/{ps.id}/update" style="display:grid;grid-template-columns:repeat(4,minmax(100px,1fr)) auto;gap:8px;align-items:end;padding:8px 0">
@@ -1564,14 +1484,13 @@ def program_status_settings(
                   </div>
                   <div class="actions" style="margin:0">
                     <button type="submit">Save</button>
-                    <a class="button secondary" href="/settings/program-statuses">Cancel</a>
+                    <a class="button secondary" href="/settings#program-statuses">Cancel</a>
                   </div>
                 </form>
               </td>
-            </tr>"""
-            rows.append(edit_form)
+            </tr>""")
         else:
-            rows.append(f"""
+            status_rows.append(f"""
             <tr>
               <td>{color_swatch}{escape(ps.name)}{default_badge}</td>
               <td><code style="font-size:12px">{escape(ps.slug)}</code></td>
@@ -1580,7 +1499,7 @@ def program_status_settings(
               <td><span class="pill">{active_label}</span></td>
               <td>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <a class="button secondary" href="/settings/program-statuses?edit_status_id={ps.id}">Edit</a>
+                  <a class="button secondary" href="/settings?edit_status_id={ps.id}#program-statuses">Edit</a>
                   <form method="post" action="/settings/program-statuses/{ps.id}/{toggle_action}" style="display:inline">
                     <button class="secondary" type="submit">{toggle_label}</button>
                   </form>
@@ -1588,55 +1507,146 @@ def program_status_settings(
               </td>
             </tr>""")
 
-    table_body = "".join(rows) or '<tr><td colspan="6" class="muted">No program statuses yet.</td></tr>'
+    status_table_body = "".join(status_rows) or '<tr><td colspan="6" class="muted">No program statuses yet.</td></tr>'
+
+    # ── Source Types section ──────────────────────────────────────────────────
+    source_types = list(db.scalars(select(SourceType).order_by(SourceType.name.asc())))
+    source_rows = []
+    for source_type in source_types:
+        action = "Deactivate" if source_type.is_active else "Reactivate"
+        action_path = "deactivate" if source_type.is_active else "activate"
+        status_label = "Active" if source_type.is_active else "Inactive"
+        source_rows.append(f"""
+            <tr>
+              <td>{escape(source_type.name)}</td>
+              <td><span class="pill">{status_label}</span></td>
+              <td>{escape(_format_datetime(source_type.updated_at))}</td>
+              <td>
+                <form method="post" action="/settings/source-types/{source_type.id}/{action_path}">
+                  <button class="secondary" type="submit">{action}</button>
+                </form>
+              </td>
+            </tr>""")
+
+    source_table_body = "".join(source_rows) or '<tr><td colspan="4" class="muted">No source types yet.</td></tr>'
 
     body = f"""
     <header>
       <div>
         <h1>Settings</h1>
-        <div class="muted">Program statuses</div>
+        <div class="muted">Workspace configuration</div>
       </div>
-      <div class="top-links">
-        <a href="/settings/source-types">Source Types</a>
-        <a href="/">Back to Programs</a>
-      </div>
+      <a href="/">Back to Programs</a>
     </header>
-    <div class="layout">
-      <section class="panel">
-        <h2>New Program Status</h2>
-        <form method="post" action="/settings/program-statuses/create">
-          <label for="ps_name">Name</label>
-          <input id="ps_name" name="name" required maxlength="120">
-          <label for="ps_slug">Slug</label>
-          <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
-          <label for="ps_color">Color</label>
-          <input id="ps_color" name="color" maxlength="20" value="#6b7280" placeholder="#6b7280">
-          <label for="ps_sort">Sort order</label>
-          <input id="ps_sort" name="sort_order" type="number" min="0" value="0">
-          <div class="actions">
-            <button type="submit">Create Status</button>
-          </div>
-        </form>
-      </section>
-      <section class="panel">
+
+    <nav class="settings-nav">
+      <a href="#program-statuses">Program Statuses</a>
+      <a href="#source-types">Source Types</a>
+    </nav>
+
+    <div class="settings-section" id="program-statuses">
+      <div class="settings-section-header">
         <h2>Program Statuses</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Slug</th>
-              <th>Color</th>
-              <th>Order</th>
-              <th>State</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>{table_body}</tbody>
-        </table>
-      </section>
+        <details class="create-panel">
+          <summary class="button secondary">+ New Program Status</summary>
+          <div class="panel">
+            <form method="post" action="/settings/program-statuses/create">
+              <label for="ps_name">Name</label>
+              <input id="ps_name" name="name" required maxlength="120">
+              <label for="ps_slug">Slug</label>
+              <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
+              <label for="ps_color">Color</label>
+              <input id="ps_color" name="color" maxlength="20" value="#6b7280" placeholder="#6b7280">
+              <label for="ps_sort">Sort order</label>
+              <input id="ps_sort" name="sort_order" type="number" min="0" value="0">
+              <div class="actions">
+                <button type="submit">Create Status</button>
+              </div>
+            </form>
+          </div>
+        </details>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>Slug</th><th>Color</th><th>Order</th><th>State</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>{status_table_body}</tbody>
+      </table>
+    </div>
+
+    <div class="settings-section" id="source-types">
+      <div class="settings-section-header">
+        <h2>Source Types</h2>
+        <details class="create-panel">
+          <summary class="button secondary">+ New Source Type</summary>
+          <div class="panel">
+            <form method="post" action="/settings/source-types/create">
+              <label for="st_name">Name</label>
+              <input id="st_name" name="name" required maxlength="120">
+              <div class="actions">
+                <button type="submit">Create Source Type</button>
+              </div>
+            </form>
+          </div>
+        </details>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>State</th><th>Updated</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>{source_table_body}</tbody>
+      </table>
     </div>
     """
-    return _page_shell("Settings · Program Statuses", body)
+    return _page_shell("Settings", body)
+
+
+# ── Redirects for old settings URLs ──────────────────────────────────────────
+
+@router.get("/settings/source-types", include_in_schema=False)
+def redirect_source_types_settings() -> RedirectResponse:
+    return RedirectResponse("/settings#source-types", status_code=301)
+
+
+@router.get("/settings/program-statuses", include_in_schema=False)
+def redirect_program_statuses_settings() -> RedirectResponse:
+    return RedirectResponse("/settings#program-statuses", status_code=301)
+
+
+# ── Settings POST handlers ────────────────────────────────────────────────────
+
+@router.post("/settings/source-types/create", include_in_schema=False)
+async def create_source_type_from_ui(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+    parsed = await _parse_form(request)
+    name = parsed.get("name", "").strip()
+    if name:
+        db.add(SourceType(name=name))
+        db.commit()
+    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/source-types/{source_type_id}/deactivate", include_in_schema=False)
+def deactivate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    source_type = db.get(SourceType, source_type_id)
+    if source_type is not None:
+        source_type.is_active = False
+        db.add(source_type)
+        db.commit()
+    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/source-types/{source_type_id}/activate", include_in_schema=False)
+def activate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    source_type = db.get(SourceType, source_type_id)
+    if source_type is not None:
+        source_type.is_active = True
+        db.add(source_type)
+        db.commit()
+    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/settings/program-statuses/create", include_in_schema=False)
@@ -1654,7 +1664,7 @@ async def create_program_status_from_ui(
         if existing is None:
             db.add(ProgramStatus(name=name, slug=slug, color=color, sort_order=sort_order))
             db.commit()
-    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/settings/program-statuses/{status_id}/update", include_in_schema=False)
@@ -1676,7 +1686,7 @@ async def update_program_status_from_ui(
             ps.is_default = is_default
             db.add(ps)
             db.commit()
-    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/settings/program-statuses/{status_id}/deactivate", include_in_schema=False)
@@ -1688,7 +1698,7 @@ def deactivate_program_status_from_ui(
         ps.is_active = False
         db.add(ps)
         db.commit()
-    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/settings/program-statuses/{status_id}/activate", include_in_schema=False)
@@ -1700,4 +1710,4 @@ def activate_program_status_from_ui(
         ps.is_active = True
         db.add(ps)
         db.commit()
-    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)

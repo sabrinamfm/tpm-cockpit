@@ -212,7 +212,7 @@ def test_reorder_status(client) -> None:
 # ── Settings UI ───────────────────────────────────────────────────────────────
 
 def test_program_statuses_settings_page_loads(client) -> None:
-    response = client.get("/settings/program-statuses")
+    response = client.get("/settings")
 
     assert response.status_code == 200
     assert "Program Statuses" in response.text
