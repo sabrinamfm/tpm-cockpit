@@ -1,1 +1,3 @@
-"""SQLAlchemy models will be registered here as the product grows."""
+from app.models.program import Program
+
+__all__ = ["Program"]
