@@ -1,13 +1,15 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+ProgramStatus = Literal["active", "paused", "completed", "archived"]
 
 
 class ProgramBase(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
-    status: str = Field(default="active", min_length=1, max_length=50)
+    status: ProgramStatus = "active"
 
 
 class ProgramCreate(ProgramBase):
@@ -17,7 +19,7 @@ class ProgramCreate(ProgramBase):
 class ProgramUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
-    status: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    status: Optional[ProgramStatus] = None
 
 
 class ProgramRead(ProgramBase):

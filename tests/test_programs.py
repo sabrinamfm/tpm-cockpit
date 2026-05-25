@@ -53,14 +53,14 @@ def test_update_program(client) -> None:
 
     response = client.patch(
         f"/programs/{created['id']}",
-        json={"name": "New Name", "status": "complete"},
+        json={"name": "New Name", "status": "completed"},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "New Name"
     assert data["description"] == "Old description"
-    assert data["status"] == "complete"
+    assert data["status"] == "completed"
 
 
 def test_delete_program(client) -> None:
@@ -71,3 +71,9 @@ def test_delete_program(client) -> None:
 
     assert delete_response.status_code == 204
     assert get_response.status_code == 404
+
+
+def test_rejects_invalid_program_status(client) -> None:
+    response = client.post("/programs", json={"name": "Bad Status", "status": "blocked"})
+
+    assert response.status_code == 422
