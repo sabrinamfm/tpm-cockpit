@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+{% block title %}{{ program.name }}{% endblock %}
+{% block content %}
+{% set attention = program_attention_state(program) %}
+{% set attention_class = "ok" if attention == "OK" else "attention" %}
+<header>
+  <div>
+    <h1>{{ program.name }}</h1>
+    <div class="muted">Program detail</div>
+  </div>
+  <div class="top-links">
+    <a href="/">Back to Programs</a>
+    <a href="/settings">Settings</a>
+  </div>
+</header>
+
+<section class="panel">
+  <h2>Overview</h2>
+  <p>{{ program.description or "No description yet." }}</p>
+  <div class="detail-grid">
+    <div><strong>Status</strong><br><span class="pill">{{ program.status }}</span></div>
+    <div><strong>Attention</strong><br><span class="pill {{ attention_class }}">{{ attention }}</span></div>
+    <div><strong>Created</strong><br>{{ program.created_at | format_datetime }}</div>
+    <div><strong>Updated</strong><br>{{ program.updated_at | format_datetime }}</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h2>Work Items</h2>
+  </div>
+
+  <details id="new-work-item" class="collapsible-panel"{% if show_new_work_item == "1" or work_item_error %} open{% endif %}>
+    <summary class="button">New Work Item</summary>
+    <div class="collapsible-body">
+      {% if work_item_error %}<div class="error">{{ work_item_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/work-items/create">
+        <label for="work-title">Title</label>
+        <input id="work-title" name="title" required maxlength="200">
+        <label for="work-description">Description</label>
+        <textarea id="work-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="work-status">Status</label>
+            <select id="work-status" name="status">
+              {% for ws in WORK_ITEM_STATUSES %}
+                <option value="{{ ws }}">{{ ws | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="work-priority">Priority</label>
+            <select id="work-priority" name="priority">
+              {% for p in WORK_ITEM_PRIORITIES %}
+                <option value="{{ p }}"{% if p == "medium" %} selected{% endif %}>{{ p | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="work-owner">Owner</label>
+            <input id="work-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="work-next-step">Next Step</label>
+            <input id="work-next-step" name="next_step">
+          </div>
+          <div>
+            <label for="work-source-type">Source Type</label>
+            <select id="work-source-type" name="source_type_id">
+              <option value="">No source</option>
+              {% for st in source_types %}
+                {% if st.is_active %}
+                  <option value="{{ st.id }}">{{ st.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="work-due-date">Due Date</label>
+            <input id="work-due-date" name="due_date" type="date">
+          </div>
+          <div>
+            <label for="work-link">Link</label>
+            <input id="work-link" name="link" maxlength="500">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Create Work Item</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_work_item %}
+  <details id="edit-work-item" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Work Item</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/work-items/{{ edit_work_item.id }}/update">
+        <label for="edit-title">Title</label>
+        <input id="edit-title" name="title" required maxlength="200" value="{{ edit_work_item.title }}">
+        <label for="edit-description">Description</label>
+        <textarea id="edit-description" name="description">{{ edit_work_item.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-status">Status</label>
+            <select id="edit-status" name="status">
+              {% for ws in WORK_ITEM_STATUSES %}
+                <option value="{{ ws }}"{% if ws == edit_work_item.status %} selected{% endif %}>{{ ws | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-priority">Priority</label>
+            <select id="edit-priority" name="priority">
+              {% for p in WORK_ITEM_PRIORITIES %}
+                <option value="{{ p }}"{% if p == edit_work_item.priority %} selected{% endif %}>{{ p | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-owner">Owner</label>
+            <input id="edit-owner" name="owner" maxlength="120" value="{{ edit_work_item.owner or '' }}">
+          </div>
+          <div>
+            <label for="edit-next-step">Next Step</label>
+            <input id="edit-next-step" name="next_step" value="{{ edit_work_item.next_step or '' }}">
+          </div>
+          <div>
+            <label for="edit-source-type-id">Source Type</label>
+            <select id="edit-source-type-id" name="source_type_id">
+              <option value=""{% if not edit_work_item.source_type_id %} selected{% endif %}>No source</option>
+              {% for st in source_types %}
+                {% if st.is_active or st.id == edit_work_item.source_type_id %}
+                  <option value="{{ st.id }}"{% if st.id == edit_work_item.source_type_id %} selected{% endif %}>
+                    {{ st.name }}{% if not st.is_active %} (inactive){% endif %}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-due-date">Due Date</label>
+            <input id="edit-due-date" name="due_date" type="date" value="{{ edit_work_item.due_date | format_date }}">
+          </div>
+          <div>
+            <label for="edit-link">Link</label>
+            <input id="edit-link" name="link" maxlength="500" value="{{ edit_work_item.link or '' }}">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Save Work Item</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="work_status_filter">Status</label>
+      <select id="work_status_filter" name="work_status_filter">
+        <option value="">All statuses</option>
+        {% for ws in WORK_ITEM_STATUSES %}
+          <option value="{{ ws }}"{% if ws == work_status_filter %} selected{% endif %}>{{ ws | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="priority_filter">Priority</label>
+      <select id="priority_filter" name="priority_filter">
+        <option value="">All priorities</option>
+        {% for p in WORK_ITEM_PRIORITIES %}
+          <option value="{{ p }}"{% if p == priority_filter %} selected{% endif %}>{{ p | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="stale_filter">Stale</label>
+      <select id="stale_filter" name="stale_filter">
+        <option value="">All touch states</option>
+        <option value="stale"{% if stale_filter == "stale" %} selected{% endif %}>Stale</option>
+        <option value="not_stale"{% if stale_filter == "not_stale" %} selected{% endif %}>Not stale</option>
+      </select>
+    </div>
+    <div>
+      <label for="owner_filter">Owner</label>
+      <select id="owner_filter" name="owner_filter">
+        <option value="">All owners</option>
+        {% for owner in work_owners %}
+          <option value="{{ owner }}"{% if owner == owner_filter %} selected{% endif %}>{{ owner }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="source_type_filter">Source Type</label>
+      <select id="source_type_filter" name="source_type_filter">
+        <option value="">All sources</option>
+        {% for st in source_types %}
+          <option value="{{ st.id }}"{% if source_type_filter and st.id|string == source_type_filter %} selected{% endif %}>{{ st.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="work_sort">Sort</label>
+      <select id="work_sort" name="work_sort">
+        {% for value, label in WORK_ITEM_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == work_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Priority</th>
+        <th>Owner</th>
+        <th>Next Step</th>
+        <th>Source Type</th>
+        <th>Due Date</th>
+        <th>Link</th>
+        <th>Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in work_items %}
+        {% set blocked = item.status == "blocked" %}
+        {% set overdue = work_item_is_overdue(item) %}
+        {% set stale = work_item_is_stale(item) %}
+        {% set row_class = "blocked-row" if blocked else "overdue-row" if overdue else "stale-row" if stale else "" %}
+        <tr class="{{ row_class }}">
+          <td>{{ item.title }}</td>
+          <td><span class="pill">{{ item.status }}</span></td>
+          <td><span class="pill">{{ item.priority }}</span></td>
+          <td>{{ item.owner or "" }}</td>
+          <td>
+            {{ item.next_step or "" }}
+            {% if stale %}<span class="pill attention">Stale</span>{% endif %}
+            {% if item.last_touched_at %}<span class="pill">Touched {{ item.last_touched_at | format_datetime }}</span>{% endif %}
+          </td>
+          <td>{{ item.source_type.name if item.source_type else "" }}</td>
+          <td>
+            {{ item.due_date | format_date }}
+            {% if overdue %}<span class="pill attention">Overdue</span>{% endif %}
+          </td>
+          <td>{% if item.link %}<a href="{{ item.link }}" target="_blank" rel="noreferrer">Open</a>{% endif %}</td>
+          <td>{{ item.updated_at | format_datetime }}</td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_work_item_id={{ item.id }}#edit-work-item">Edit</a>
+                <form method="post" action="/work-items/{{ item.id }}/touch">
+                  <button type="submit">Mark touched</button>
+                </form>
+                <a href="/work-items/{{ item.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="10" class="muted">No work items match the current view.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h2>Dependencies</h2>
+  </div>
+
+  <details id="new-dependency" class="collapsible-panel"{% if show_new_dependency == "1" or dependency_error %} open{% endif %}>
+    <summary class="button">New Dependency</summary>
+    <div class="collapsible-body">
+      {% if dependency_error %}<div class="error">{{ dependency_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/dependencies/create">
+        <label for="dependency-title">Title</label>
+        <input id="dependency-title" name="title" required maxlength="200">
+        <label for="dependency-description">Description</label>
+        <textarea id="dependency-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="dependency-type">Type</label>
+            <select id="dependency-type" name="dependency_type">
+              {% for dt in DEPENDENCY_TYPES %}
+                <option value="{{ dt }}">{{ dt | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="dependency-status">Status</label>
+            <select id="dependency-status" name="status">
+              {% for ds in DEPENDENCY_STATUSES %}
+                <option value="{{ ds }}">{{ ds | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="blocking-level">Blocking Level</label>
+            <select id="blocking-level" name="blocking_level">
+              {% for bl in BLOCKING_LEVELS %}
+                <option value="{{ bl }}"{% if bl == "medium" %} selected{% endif %}>{{ bl | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="dependency-owner">Owner</label>
+            <input id="dependency-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="external-team">External Team</label>
+            <input id="external-team" name="external_team" maxlength="120">
+          </div>
+          <div>
+            <label for="dependency-due-date">Due Date</label>
+            <input id="dependency-due-date" name="due_date" type="date">
+          </div>
+          <div>
+            <label for="last-confirmation-at">Last Confirmation</label>
+            <input id="last-confirmation-at" name="last_confirmation_at" type="datetime-local">
+          </div>
+        </div>
+        <label for="dependency-notes">Notes</label>
+        <textarea id="dependency-notes" name="notes"></textarea>
+        <div class="actions">
+          <button type="submit">Create Dependency</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_dependency %}
+  <details id="edit-dependency" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Dependency</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/dependencies/{{ edit_dependency.id }}/update">
+        <label for="edit-dependency-title">Title</label>
+        <input id="edit-dependency-title" name="title" required maxlength="200" value="{{ edit_dependency.title }}">
+        <label for="edit-dependency-description">Description</label>
+        <textarea id="edit-dependency-description" name="description">{{ edit_dependency.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-dependency-type">Type</label>
+            <select id="edit-dependency-type" name="dependency_type">
+              {% for dt in DEPENDENCY_TYPES %}
+                <option value="{{ dt }}"{% if dt == edit_dependency.dependency_type %} selected{% endif %}>{{ dt | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-dependency-status">Status</label>
+            <select id="edit-dependency-status" name="status">
+              {% for ds in DEPENDENCY_STATUSES %}
+                <option value="{{ ds }}"{% if ds == edit_dependency.status %} selected{% endif %}>{{ ds | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-blocking-level">Blocking Level</label>
+            <select id="edit-blocking-level" name="blocking_level">
+              {% for bl in BLOCKING_LEVELS %}
+                <option value="{{ bl }}"{% if bl == edit_dependency.blocking_level %} selected{% endif %}>{{ bl | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-dependency-owner">Owner</label>
+            <input id="edit-dependency-owner" name="owner" maxlength="120" value="{{ edit_dependency.owner or '' }}">
+          </div>
+          <div>
+            <label for="edit-external-team">External Team</label>
+            <input id="edit-external-team" name="external_team" maxlength="120" value="{{ edit_dependency.external_team or '' }}">
+          </div>
+          <div>
+            <label for="edit-dependency-due-date">Due Date</label>
+            <input id="edit-dependency-due-date" name="due_date" type="date" value="{{ edit_dependency.due_date | format_date }}">
+          </div>
+          <div>
+            <label for="edit-last-confirmation-at">Last Confirmation</label>
+            <input id="edit-last-confirmation-at" name="last_confirmation_at" type="datetime-local" value="{{ edit_dependency.last_confirmation_at.strftime('%Y-%m-%dT%H:%M') if edit_dependency.last_confirmation_at else '' }}">
+          </div>
+        </div>
+        <label for="edit-dependency-notes">Notes</label>
+        <textarea id="edit-dependency-notes" name="notes">{{ edit_dependency.notes or "" }}</textarea>
+        <div class="actions">
+          <button type="submit">Save Dependency</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="dependency_status_filter">Status</label>
+      <select id="dependency_status_filter" name="dependency_status_filter">
+        <option value="">All statuses</option>
+        {% for ds in DEPENDENCY_STATUSES %}
+          <option value="{{ ds }}"{% if ds == dependency_status_filter %} selected{% endif %}>{{ ds | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="dependency_type_filter">Type</label>
+      <select id="dependency_type_filter" name="dependency_type_filter">
+        <option value="">All types</option>
+        {% for dt in DEPENDENCY_TYPES %}
+          <option value="{{ dt }}"{% if dt == dependency_type_filter %} selected{% endif %}>{{ dt | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="blocking_level_filter">Blocking Level</label>
+      <select id="blocking_level_filter" name="blocking_level_filter">
+        <option value="">All levels</option>
+        {% for bl in BLOCKING_LEVELS %}
+          <option value="{{ bl }}"{% if bl == blocking_level_filter %} selected{% endif %}>{{ bl | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="dependency_owner_filter">Owner</label>
+      <select id="dependency_owner_filter" name="dependency_owner_filter">
+        <option value="">All owners</option>
+        {% for owner in dep_owners %}
+          <option value="{{ owner }}"{% if owner == dependency_owner_filter %} selected{% endif %}>{{ owner }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="dependency_sort">Sort</label>
+      <select id="dependency_sort" name="dependency_sort">
+        {% for value, label in DEPENDENCY_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == dependency_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Type</th>
+        <th>Blocking</th>
+        <th>Owner</th>
+        <th>External Team</th>
+        <th>Due Date</th>
+        <th>Confirmed</th>
+        <th>Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dep in dependencies %}
+        {% set blocked = dep.status == "blocked" %}
+        {% set critical = dep.blocking_level == "critical" %}
+        {% set stale_dep = dependency_is_stale(dep) %}
+        {% set row_class = "blocked-row" if blocked else "critical-row" if critical else "stale-row" if stale_dep else "" %}
+        <tr class="{{ row_class }}">
+          <td>
+            {{ dep.title }}
+            {% if blocked %}<span class="pill attention">Blocked</span>{% endif %}
+            {% if critical %}<span class="pill attention">Critical</span>{% endif %}
+            {% if stale_dep %}<span class="pill attention">Stale</span>{% endif %}
+          </td>
+          <td><span class="pill">{{ dep.status }}</span></td>
+          <td>{{ dep.dependency_type }}</td>
+          <td><span class="pill">{{ dep.blocking_level }}</span></td>
+          <td>{{ dep.owner or "" }}</td>
+          <td>{{ dep.external_team or "" }}</td>
+          <td>{{ dep.due_date | format_date }}</td>
+          <td>{{ dep.last_confirmation_at | format_datetime }}</td>
+          <td>{{ dep.updated_at | format_datetime }}</td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_dependency_id={{ dep.id }}#edit-dependency">Edit</a>
+                <form method="post" action="/dependencies/{{ dep.id }}/confirm-ui">
+                  <button type="submit">Confirm Dependency</button>
+                </form>
+                <a href="/dependencies/{{ dep.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="10" class="muted">No dependencies match the current view.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="placeholder-grid">
+  {% for title in ["Risks", "Decisions", "Notes"] %}
+    <section class="panel placeholder">
+      <h3>{{ title }}</h3>
+      <div class="muted">Not implemented yet.</div>
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

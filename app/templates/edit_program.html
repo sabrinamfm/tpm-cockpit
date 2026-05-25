@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Edit Program{% endblock %}
+{% block content %}
+<header>
+  <div>
+    <h1>Edit Program</h1>
+    <div class="muted">{{ program.name }}</div>
+  </div>
+  <a href="/">Back to Programs</a>
+</header>
+<section class="panel">
+  <form method="post" action="/programs/{{ program.id }}/update">
+    <label for="name">Name</label>
+    <input id="name" name="name" required maxlength="200" value="{{ program.name }}">
+    <label for="description">Description</label>
+    <textarea id="description" name="description">{{ program.description or "" }}</textarea>
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      {% for ps in all_statuses %}
+        {% if ps.is_active or ps.slug == program.status %}
+          <option value="{{ ps.slug }}"{% if ps.slug == program.status %} selected{% endif %}>
+            {{ ps.name }}{% if not ps.is_active %} (inactive){% endif %}
+          </option>
+        {% endif %}
+      {% endfor %}
+    </select>
+    <div class="actions">
+      <button type="submit">Save Program</button>
+      <a class="button secondary" href="/">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

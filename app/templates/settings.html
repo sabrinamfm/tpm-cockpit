@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<header>
+  <div>
+    <h1>Settings</h1>
+    <div class="muted">Workspace configuration</div>
+  </div>
+  <a href="/">Back to Programs</a>
+</header>
+
+<nav class="settings-nav">
+  <a href="#program-statuses">Program Statuses</a>
+  <a href="#source-types">Source Types</a>
+</nav>
+
+<div class="settings-section" id="program-statuses">
+  <div class="settings-section-header">
+    <h2>Program Statuses</h2>
+    <details class="create-panel">
+      <summary class="button secondary">+ New Program Status</summary>
+      <div class="panel">
+        <form method="post" action="/settings/program-statuses/create">
+          <label for="ps_name">Name</label>
+          <input id="ps_name" name="name" required maxlength="120">
+          <label for="ps_slug">Slug</label>
+          <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
+          <label for="ps_color">Color</label>
+          <input id="ps_color" name="color" type="color" value="#6b7280">
+          <div class="actions">
+            <button type="submit">Create Status</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
+  <table id="tbl-program-statuses">
+    <thead>
+      <tr>
+        <th></th><th>Name</th><th>Slug</th><th>Color</th><th>Default</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ps in all_statuses %}
+        {% if edit_status_id == ps.id %}
+          <tr data-id="{{ ps.id }}">
+            <td></td>
+            <td colspan="5">
+              <form method="post" action="/settings/program-statuses/{{ ps.id }}/update" style="display:flex;gap:8px;align-items:flex-end;padding:4px 0;flex-wrap:wrap">
+                <div>
+                  <label for="edit_name_{{ ps.id }}" style="margin:0 0 4px">Name</label>
+                  <input id="edit_name_{{ ps.id }}" name="name" value="{{ ps.name }}" required maxlength="120">
+                </div>
+                <div>
+                  <label for="edit_slug_{{ ps.id }}" style="margin:0 0 4px">Slug</label>
+                  <input id="edit_slug_{{ ps.id }}" name="slug" value="{{ ps.slug }}" required maxlength="50">
+                </div>
+                <div>
+                  <label for="edit_color_{{ ps.id }}" style="margin:0 0 4px">Color</label>
+                  <input id="edit_color_{{ ps.id }}" name="color" type="color" value="{{ ps.color }}">
+                </div>
+                <div>
+                  <label style="margin:0 0 4px">Default</label>
+                  <select name="is_default">
+                    <option value="1"{% if ps.is_default %} selected{% endif %}>Yes</option>
+                    <option value="0"{% if not ps.is_default %} selected{% endif %}>No</option>
+                  </select>
+                </div>
+                <div class="actions" style="margin:0">
+                  <button type="submit">Save</button>
+                  <a class="button secondary" href="/settings#program-statuses">Cancel</a>
+                </div>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr draggable="true" data-id="{{ ps.id }}">
+            <td class="drag-handle">⠿</td>
+            <td>
+              <span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{{ ps.color }};vertical-align:middle;margin-right:6px"></span>
+              {{ ps.name }}
+              {% if ps.is_default %}<span class="pill">Default</span>{% endif %}
+            </td>
+            <td><code style="font-size:12px">{{ ps.slug }}</code></td>
+            <td>{{ ps.color }}</td>
+            <td>{{ "✓" if ps.is_default else "—" }}</td>
+            <td>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <a class="button secondary" href="/settings?edit_status_id={{ ps.id }}#program-statuses">Edit</a>
+                <form method="post" action="/settings/program-statuses/{{ ps.id }}/delete" style="display:inline">
+                  <button class="secondary" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      {% else %}
+        <tr><td colspan="6" class="muted">No program statuses yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="settings-section" id="source-types">
+  <div class="settings-section-header">
+    <h2>Source Types</h2>
+    <details class="create-panel">
+      <summary class="button secondary">+ New Source Type</summary>
+      <div class="panel">
+        <form method="post" action="/settings/source-types/create">
+          <label for="st_name">Name</label>
+          <input id="st_name" name="name" required maxlength="120">
+          <label for="st_slug">Slug</label>
+          <input id="st_slug" name="slug" maxlength="50" placeholder="e.g. email-thread">
+          <div class="actions">
+            <button type="submit">Create Source Type</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
+  <table id="tbl-source-types">
+    <thead>
+      <tr>
+        <th></th><th>Name</th><th>Slug</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for st in source_types %}
+        {% if edit_source_type_id == st.id %}
+          <tr data-id="{{ st.id }}">
+            <td></td>
+            <td colspan="3">
+              <form method="post" action="/settings/source-types/{{ st.id }}/update" style="display:flex;gap:8px;align-items:flex-end;padding:4px 0;flex-wrap:wrap">
+                <div>
+                  <label for="edit_st_name_{{ st.id }}" style="margin:0 0 4px">Name</label>
+                  <input id="edit_st_name_{{ st.id }}" name="name" value="{{ st.name }}" required maxlength="120">
+                </div>
+                <div class="actions" style="margin:0">
+                  <button type="submit">Save</button>
+                  <a class="button secondary" href="/settings#source-types">Cancel</a>
+                </div>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr draggable="true" data-id="{{ st.id }}">
+            <td class="drag-handle">⠿</td>
+            <td>{{ st.name }}</td>
+            <td><code style="font-size:12px">{{ st.slug }}</code></td>
+            <td>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <a class="button secondary" href="/settings?edit_source_type_id={{ st.id }}#source-types">Edit</a>
+                <form method="post" action="/settings/source-types/{{ st.id }}/delete" style="display:inline">
+                  <button class="secondary" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      {% else %}
+        <tr><td colspan="4" class="muted">No source types yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function() {
+  function initDragSort(tableId, reorderUrl) {
+    var tbody = document.querySelector('#' + tableId + ' tbody');
+    if (!tbody) return;
+    var dragging = null;
+    tbody.addEventListener('dragstart', function(e) {
+      dragging = e.target.closest('tr[data-id]');
+      if (dragging) setTimeout(function() { dragging.style.opacity = '0.4'; }, 0);
+    });
+    tbody.addEventListener('dragend', function() {
+      if (dragging) dragging.style.opacity = '';
+      dragging = null;
+    });
+    tbody.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      if (!dragging) return;
+      var row = e.target.closest('tr[data-id]');
+      if (row && row !== dragging) {
+        var mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        if (e.clientY < mid) tbody.insertBefore(dragging, row);
+        else tbody.insertBefore(dragging, row.nextSibling);
+      }
+    });
+    tbody.addEventListener('drop', function(e) {
+      e.preventDefault();
+      var ids = [].slice.call(tbody.querySelectorAll('tr[data-id]')).map(function(r) { return +r.dataset.id; });
+      fetch(reorderUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})});
+    });
+  }
+  initDragSort('tbl-program-statuses', '/settings/program-statuses/reorder');
+  initDragSort('tbl-source-types', '/settings/source-types/reorder');
+})();
+</script>
+{% endblock %}

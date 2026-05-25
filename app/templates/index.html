@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Programs{% endblock %}
+{% block content %}
+<header>
+  <div>
+    <h1>TPM Cockpit</h1>
+    <div class="muted">Programs workspace</div>
+  </div>
+  <div class="top-links">
+    <a href="/settings">Settings</a>
+    <a href="/docs">API docs</a>
+  </div>
+</header>
+<div class="layout">
+  <section class="panel">
+    <h2>New Program</h2>
+    <form method="post" action="/programs/create">
+      <label for="name">Name</label>
+      <input id="name" name="name" required maxlength="200">
+      <label for="description">Description</label>
+      <textarea id="description" name="description"></textarea>
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        {% for ps in all_statuses %}
+          {% if ps.is_active %}
+            <option value="{{ ps.slug }}">{{ ps.name }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <div class="actions">
+        <button type="submit">Create Program</button>
+      </div>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Program List</h2>
+    <form class="filters" method="get" action="/">
+      <div>
+        <label for="status_filter">Status</label>
+        <select id="status_filter" name="status_filter">
+          <option value="">All statuses</option>
+          {% for ps in all_statuses %}
+            {% if ps.is_active or ps.slug == status_filter %}
+              <option value="{{ ps.slug }}"{% if ps.slug == status_filter %} selected{% endif %}>
+                {{ ps.name }}{% if not ps.is_active %} (inactive){% endif %}
+              </option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="attention_filter">Attention</label>
+        <select id="attention_filter" name="attention_filter">
+          <option value="">All attention states</option>
+          {% for attention in ATTENTION_STATES %}
+            <option value="{{ attention }}"{% if attention == attention_filter %} selected{% endif %}>{{ attention }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="sort">Sort</label>
+        <select id="sort" name="sort">
+          {% for value, label in [("updated_at", "Recently updated"), ("name", "Name"), ("status", "Status")] %}
+            <option value="{{ value }}"{% if value == sort %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions">
+        <button type="submit">Apply</button>
+        <a class="button secondary" href="/">Clear</a>
+      </div>
+    </form>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Attention</th>
+          <th>Updated</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for program in programs %}
+          {% set attention = program_attention_state(program) %}
+          {% set attention_class = "ok" if attention == "OK" else "attention" %}
+          <tr>
+            <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+            <td>{{ program.description or "" }}</td>
+            <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
+            <td><span class="pill {{ attention_class }}">{{ attention }}</span></td>
+            <td>{{ program.updated_at | format_datetime }}</td>
+            <td class="row-actions">
+              <details class="action-menu">
+                <summary class="button secondary">Actions</summary>
+                <div class="menu">
+                  <a href="/programs/{{ program.id }}/edit">Edit</a>
+                  <a href="/programs/{{ program.id }}/delete/confirm">Delete</a>
+                </div>
+              </details>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="muted">No programs match the current view.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}
