@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.session import get_db
 from app.domain.dependencies import dependency_is_stale
 from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
-from app.models import Dependency, Program, SourceType, WorkItem
+from app.models import Dependency, Program, ProgramStatus, SourceType, WorkItem
+from app.models.program_status import seed_default_program_statuses
+from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
 router = APIRouter(tags=["ui"])
-
-PROGRAM_STATUSES = ("active", "paused", "completed", "archived")
 WORK_ITEM_STATUSES = ("open", "in_progress", "blocked", "completed", "cancelled")
 WORK_ITEM_PRIORITIES = ("low", "medium", "high", "critical")
 WORK_ITEM_PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -38,7 +38,6 @@ BLOCKING_LEVEL_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 ATTENTION_STATES = ("Needs attention", "OK")
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
-    "status": Program.status.asc(),
     "updated_at": Program.updated_at.desc(),
 }
 WORK_ITEM_SORT_LABELS = {
@@ -76,6 +75,20 @@ async def _parse_form(request: Request) -> dict[str, str]:
 def _select_option(value: str, label: str, selected: Optional[str]) -> str:
     selected_attr = " selected" if value == selected else ""
     return f'<option value="{escape(value)}"{selected_attr}>{escape(label)}</option>'
+
+
+def _program_status_options(
+    statuses: list[ProgramStatus],
+    selected_slug: Optional[str] = None,
+    include_all: bool = False,
+) -> str:
+    parts = ['<option value="">All statuses</option>'] if include_all else []
+    for ps in statuses:
+        if not ps.is_active and ps.slug != selected_slug:
+            continue
+        label = ps.name if ps.is_active else f"{ps.name} (inactive)"
+        parts.append(_select_option(ps.slug, label, selected_slug))
+    return "".join(parts)
 
 
 def _source_type_options(
@@ -233,27 +246,36 @@ def program_ui(
     sort: str = "updated_at",
     db: Session = Depends(get_db),
 ) -> str:
-    if status_filter and status_filter not in PROGRAM_STATUSES:
+    seed_default_program_statuses(db)
+
+    all_statuses = list(
+        db.scalars(select(ProgramStatus).order_by(ProgramStatus.sort_order.asc(), ProgramStatus.id.asc()))
+    )
+    active_slugs = {ps.slug for ps in all_statuses if ps.is_active}
+
+    if status_filter and status_filter not in active_slugs:
         status_filter = None
     if attention_filter and attention_filter not in ATTENTION_STATES:
         attention_filter = None
-    if sort not in PROGRAM_SORTS:
+    if sort not in PROGRAM_SORTS and sort != "status":
         sort = "updated_at"
 
     statement = select(Program).options(selectinload(Program.work_items))
     if status_filter:
-        statement = statement.where(Program.status == status_filter)
-    statement = statement.order_by(PROGRAM_SORTS[sort], Program.id.desc())
+        statement = statement.join(Program.program_status).where(ProgramStatus.slug == status_filter)
+    if sort == "status":
+        if not status_filter:
+            statement = statement.join(Program.program_status)
+        statement = statement.order_by(ProgramStatus.sort_order.asc(), Program.id.desc())
+    else:
+        statement = statement.order_by(PROGRAM_SORTS[sort], Program.id.desc())
     programs = list(db.scalars(statement))
     if attention_filter:
         programs = [
             program for program in programs if program_attention_state(program) == attention_filter
         ]
 
-    status_options = '<option value="">All statuses</option>' + "".join(
-        _select_option(program_status, program_status.title(), status_filter)
-        for program_status in PROGRAM_STATUSES
-    )
+    status_options = _program_status_options(all_statuses, status_filter, include_all=True)
     attention_options = '<option value="">All attention states</option>' + "".join(
         _select_option(attention, attention, attention_filter) for attention in ATTENTION_STATES
     )
@@ -275,7 +297,7 @@ def program_ui(
             <tr>
               <td><a href="/programs/{program.id}/view">{escape(program.name)}</a></td>
               <td>{escape(program.description or "")}</td>
-              <td><span class="pill">{escape(program.status)}</span></td>
+              <td><span class="pill" style="background:{escape(program.program_status.color)}1a;color:{escape(program.program_status.color)}">{escape(program.program_status.name)}</span></td>
               <td><span class="pill {attention_class}">{escape(attention)}</span></td>
               <td>{escape(_format_datetime(program.updated_at))}</td>
               <td class="row-actions">
@@ -303,7 +325,7 @@ def program_ui(
         <div class="muted">Programs workspace</div>
       </div>
       <div class="top-links">
-        <a href="/settings/source-types">Settings</a>
+        <a href="/settings/program-statuses">Settings</a>
         <a href="/docs">API docs</a>
       </div>
     </header>
@@ -317,10 +339,7 @@ def program_ui(
           <textarea id="description" name="description"></textarea>
           <label for="status">Status</label>
           <select id="status" name="status">
-            {_select_option("active", "Active", "active")}
-            {_select_option("paused", "Paused", None)}
-            {_select_option("completed", "Completed", None)}
-            {_select_option("archived", "Archived", None)}
+            {_program_status_options(all_statuses)}
           </select>
           <div class="actions">
             <button type="submit">Create Program</button>
@@ -371,11 +390,17 @@ async def create_program_from_ui(request: Request, db: Session = Depends(get_db)
     parsed = await _parse_form(request)
     name = parsed.get("name", "").strip()
     description = parsed.get("description", "").strip() or None
-    program_status = parsed.get("status", "active")
-    if not name or program_status not in PROGRAM_STATUSES:
+    slug = parsed.get("status", "active")
+    if not name:
         return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
-
-    db.add(Program(name=name, description=description, status=program_status))
+    ps = db.scalar(select(ProgramStatus).where(ProgramStatus.slug == slug, ProgramStatus.is_active.is_(True)))
+    if ps is None:
+        ps = db.scalar(select(ProgramStatus).where(ProgramStatus.is_default.is_(True)))
+    if ps is None:
+        ps = db.scalar(select(ProgramStatus).order_by(ProgramStatus.sort_order.asc()))
+    if ps is None:
+        return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+    db.add(Program(name=name, description=description, status_id=ps.id))
     db.commit()
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -385,10 +410,10 @@ def edit_program_page(program_id: int, db: Session = Depends(get_db)) -> str:
     program = db.get(Program, program_id)
     if program is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
-    status_options = "".join(
-        _select_option(program_status, program_status.title(), program.status)
-        for program_status in PROGRAM_STATUSES
+    all_statuses = list(
+        db.scalars(select(ProgramStatus).order_by(ProgramStatus.sort_order.asc(), ProgramStatus.id.asc()))
     )
+    status_options = _program_status_options(all_statuses, selected_slug=program.status)
     body = f"""
     <header>
       <div>
@@ -426,11 +451,12 @@ async def update_program_from_ui(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
     parsed = await _parse_form(request)
     name = parsed.get("name", "").strip()
-    program_status = parsed.get("status", program.status)
-    if name and program_status in PROGRAM_STATUSES:
+    slug = parsed.get("status", program.status)
+    ps = db.scalar(select(ProgramStatus).where(ProgramStatus.slug == slug))
+    if name and ps is not None:
         program.name = name
         program.description = parsed.get("description", "").strip() or None
-        program.status = program_status
+        program.status_id = ps.id
         db.add(program)
         db.commit()
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
@@ -921,7 +947,7 @@ def program_detail(
       </div>
       <div class="top-links">
         <a href="/">Back to Programs</a>
-        <a href="/settings/source-types">Settings</a>
+        <a href="/settings/program-statuses">Settings</a>
       </div>
     </header>
     <section class="panel">
@@ -1489,3 +1515,189 @@ def activate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_
         db.add(source_type)
         db.commit()
     return RedirectResponse("/settings/source-types", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Program Status Settings ────────────────────────────────────────────────────
+
+@router.get("/settings/program-statuses", response_class=HTMLResponse, include_in_schema=False)
+def program_status_settings(
+    edit_status_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+) -> str:
+    seed_default_program_statuses(db)
+    all_statuses = list(
+        db.scalars(select(ProgramStatus).order_by(ProgramStatus.sort_order.asc(), ProgramStatus.id.asc()))
+    )
+
+    rows = []
+    for ps in all_statuses:
+        is_editing = edit_status_id == ps.id
+        active_label = "Active" if ps.is_active else "Inactive"
+        toggle_action = "deactivate" if ps.is_active else "activate"
+        toggle_label = "Deactivate" if ps.is_active else "Reactivate"
+        default_badge = ' <span class="pill">Default</span>' if ps.is_default else ""
+        color_swatch = f'<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{escape(ps.color)};vertical-align:middle;margin-right:6px"></span>'
+
+        if is_editing:
+            edit_form = f"""
+            <tr>
+              <td colspan="6">
+                <form method="post" action="/settings/program-statuses/{ps.id}/update" style="display:grid;grid-template-columns:repeat(4,minmax(100px,1fr)) auto;gap:8px;align-items:end;padding:8px 0">
+                  <div>
+                    <label for="edit_name_{ps.id}" style="margin:0 0 4px">Name</label>
+                    <input id="edit_name_{ps.id}" name="name" value="{escape(ps.name)}" required maxlength="120">
+                  </div>
+                  <div>
+                    <label for="edit_color_{ps.id}" style="margin:0 0 4px">Color</label>
+                    <input id="edit_color_{ps.id}" name="color" value="{escape(ps.color)}" maxlength="20">
+                  </div>
+                  <div>
+                    <label for="edit_sort_{ps.id}" style="margin:0 0 4px">Sort order</label>
+                    <input id="edit_sort_{ps.id}" name="sort_order" type="number" min="0" value="{ps.sort_order}">
+                  </div>
+                  <div>
+                    <label style="margin:0 0 4px">Default</label>
+                    <select name="is_default">
+                      {_select_option("1", "Yes", "1" if ps.is_default else "0")}
+                      {_select_option("0", "No", "0" if not ps.is_default else "1")}
+                    </select>
+                  </div>
+                  <div class="actions" style="margin:0">
+                    <button type="submit">Save</button>
+                    <a class="button secondary" href="/settings/program-statuses">Cancel</a>
+                  </div>
+                </form>
+              </td>
+            </tr>"""
+            rows.append(edit_form)
+        else:
+            rows.append(f"""
+            <tr>
+              <td>{color_swatch}{escape(ps.name)}{default_badge}</td>
+              <td><code style="font-size:12px">{escape(ps.slug)}</code></td>
+              <td>{escape(ps.color)}</td>
+              <td>{ps.sort_order}</td>
+              <td><span class="pill">{active_label}</span></td>
+              <td>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <a class="button secondary" href="/settings/program-statuses?edit_status_id={ps.id}">Edit</a>
+                  <form method="post" action="/settings/program-statuses/{ps.id}/{toggle_action}" style="display:inline">
+                    <button class="secondary" type="submit">{toggle_label}</button>
+                  </form>
+                </div>
+              </td>
+            </tr>""")
+
+    table_body = "".join(rows) or '<tr><td colspan="6" class="muted">No program statuses yet.</td></tr>'
+
+    body = f"""
+    <header>
+      <div>
+        <h1>Settings</h1>
+        <div class="muted">Program statuses</div>
+      </div>
+      <div class="top-links">
+        <a href="/settings/source-types">Source Types</a>
+        <a href="/">Back to Programs</a>
+      </div>
+    </header>
+    <div class="layout">
+      <section class="panel">
+        <h2>New Program Status</h2>
+        <form method="post" action="/settings/program-statuses/create">
+          <label for="ps_name">Name</label>
+          <input id="ps_name" name="name" required maxlength="120">
+          <label for="ps_slug">Slug</label>
+          <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
+          <label for="ps_color">Color</label>
+          <input id="ps_color" name="color" maxlength="20" value="#6b7280" placeholder="#6b7280">
+          <label for="ps_sort">Sort order</label>
+          <input id="ps_sort" name="sort_order" type="number" min="0" value="0">
+          <div class="actions">
+            <button type="submit">Create Status</button>
+          </div>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Program Statuses</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Slug</th>
+              <th>Color</th>
+              <th>Order</th>
+              <th>State</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>{table_body}</tbody>
+        </table>
+      </section>
+    </div>
+    """
+    return _page_shell("Settings · Program Statuses", body)
+
+
+@router.post("/settings/program-statuses/create", include_in_schema=False)
+async def create_program_status_from_ui(
+    request: Request, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    parsed = await _parse_form(request)
+    name = parsed.get("name", "").strip()
+    slug = parsed.get("slug", "").strip().lower().replace(" ", "-")
+    color = parsed.get("color", "#6b7280").strip() or "#6b7280"
+    sort_order_raw = parsed.get("sort_order", "0").strip()
+    sort_order = int(sort_order_raw) if sort_order_raw.isdigit() else 0
+    if name and slug:
+        existing = db.scalar(select(ProgramStatus).where(ProgramStatus.slug == slug))
+        if existing is None:
+            db.add(ProgramStatus(name=name, slug=slug, color=color, sort_order=sort_order))
+            db.commit()
+    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/program-statuses/{status_id}/update", include_in_schema=False)
+async def update_program_status_from_ui(
+    status_id: int, request: Request, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    ps = db.get(ProgramStatus, status_id)
+    if ps is not None:
+        parsed = await _parse_form(request)
+        name = parsed.get("name", "").strip()
+        color = parsed.get("color", "").strip() or ps.color
+        sort_order_raw = parsed.get("sort_order", str(ps.sort_order)).strip()
+        sort_order = int(sort_order_raw) if sort_order_raw.isdigit() else ps.sort_order
+        is_default = parsed.get("is_default", "0") == "1"
+        if name:
+            ps.name = name
+            ps.color = color
+            ps.sort_order = sort_order
+            ps.is_default = is_default
+            db.add(ps)
+            db.commit()
+    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/program-statuses/{status_id}/deactivate", include_in_schema=False)
+def deactivate_program_status_from_ui(
+    status_id: int, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    ps = db.get(ProgramStatus, status_id)
+    if ps is not None:
+        ps.is_active = False
+        db.add(ps)
+        db.commit()
+    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/program-statuses/{status_id}/activate", include_in_schema=False)
+def activate_program_status_from_ui(
+    status_id: int, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    ps = db.get(ProgramStatus, status_id)
+    if ps is not None:
+        ps.is_active = True
+        db.add(ps)
+        db.commit()
+    return RedirectResponse("/settings/program-statuses", status_code=status.HTTP_303_SEE_OTHER)

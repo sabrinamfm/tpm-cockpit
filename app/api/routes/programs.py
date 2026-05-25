@@ -5,15 +5,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Program
+from app.models.program import Program
+from app.models.program_status import ProgramStatus
 from app.schemas.program import ProgramCreate, ProgramRead, ProgramUpdate
 
 router = APIRouter(prefix="/programs", tags=["programs"])
 
 
+def _resolve_status_slug(db: Session, slug: str) -> ProgramStatus:
+    ps = db.scalar(select(ProgramStatus).where(ProgramStatus.slug == slug))
+    if ps is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid program status: {slug!r}",
+        )
+    return ps
+
+
 @router.post("", response_model=ProgramRead, status_code=status.HTTP_201_CREATED)
 def create_program(program_in: ProgramCreate, db: Session = Depends(get_db)) -> Program:
-    program = Program(**program_in.model_dump())
+    ps = _resolve_status_slug(db, program_in.status)
+    program = Program(name=program_in.name, description=program_in.description, status_id=ps.id)
     db.add(program)
     db.commit()
     db.refresh(program)
@@ -43,7 +55,12 @@ def update_program(
     if program is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
 
-    for field, value in program_in.model_dump(exclude_unset=True).items():
+    updates = program_in.model_dump(exclude_unset=True)
+    if "status" in updates:
+        ps = _resolve_status_slug(db, updates.pop("status"))
+        updates["status_id"] = ps.id
+
+    for field, value in updates.items():
         setattr(program, field, value)
 
     db.add(program)

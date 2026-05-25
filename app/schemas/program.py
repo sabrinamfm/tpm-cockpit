@@ -1,29 +1,27 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-ProgramStatus = Literal["active", "paused", "completed", "archived"]
 
-
-class ProgramBase(BaseModel):
+class ProgramCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
-    status: ProgramStatus = "active"
-
-
-class ProgramCreate(ProgramBase):
-    pass
+    status: str = "active"  # slug; resolved to status_id in the route handler
 
 
 class ProgramUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
-    status: Optional[ProgramStatus] = None
+    status: Optional[str] = None  # slug; resolved to status_id in the route handler
 
 
-class ProgramRead(ProgramBase):
+class ProgramRead(BaseModel):
     id: int
+    name: str
+    description: Optional[str]
+    status_id: int
+    status: str  # slug, sourced from Program.status property
     created_at: datetime
     updated_at: datetime
 

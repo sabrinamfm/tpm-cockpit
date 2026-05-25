@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import Program
+from app.models.program_status import seed_default_program_statuses
 
 
 @pytest.fixture
@@ -18,6 +19,9 @@ def client(tmp_path) -> Generator[TestClient, None, None]:
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     Base.metadata.create_all(bind=engine)
+
+    with TestingSessionLocal() as db:
+        seed_default_program_statuses(db)
 
     def override_get_db():
         db = TestingSessionLocal()

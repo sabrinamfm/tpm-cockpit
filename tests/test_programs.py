@@ -74,6 +74,7 @@ def test_delete_program(client) -> None:
 
 
 def test_rejects_invalid_program_status(client) -> None:
+    # "blocked" is a work-item status slug, not a program status slug
     response = client.post("/programs", json={"name": "Bad Status", "status": "blocked"})
 
     assert response.status_code == 422
