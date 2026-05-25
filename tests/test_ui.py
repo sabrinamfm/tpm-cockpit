@@ -69,6 +69,8 @@ def test_program_detail_page_shows_work_items_grouped_by_status(client) -> None:
 
     assert response.status_code == 200
     assert "<th>Title</th>" in response.text
+    assert "<th>Priority</th>" in response.text
+    assert "<th>Next Step</th>" in response.text
     assert "<th>Source Type</th>" in response.text
     assert "Open item" in response.text
     assert "Blocked item" in response.text
@@ -115,15 +117,39 @@ def test_work_item_ui_sort_control_and_delete_confirmation(client) -> None:
     program = client.post("/programs", json={"name": "Sort Work"}).json()
     work_item = client.post(
         f"/programs/{program['id']}/work-items",
-        json={"title": "Sortable item", "link": "https://example.com/source"},
+        json={
+            "title": "Sortable item",
+            "priority": "critical",
+            "next_step": "Follow up today",
+            "link": "https://example.com/source",
+        },
     ).json()
 
-    detail_response = client.get(f"/programs/{program['id']}/view?work_sort=title")
+    detail_response = client.get(f"/programs/{program['id']}/view?work_sort=priority&priority_filter=critical")
     confirm_response = client.get(f"/work-items/{work_item['id']}/delete/confirm")
 
     assert detail_response.status_code == 200
     assert "Sortable item" in detail_response.text
+    assert "critical" in detail_response.text
+    assert "Follow up today" in detail_response.text
+    assert "Stale" in detail_response.text
     assert "https://example.com/source" in detail_response.text
+    assert f"/work-items/{work_item['id']}/touch" in detail_response.text
     assert f"/work-items/{work_item['id']}/delete/confirm" in detail_response.text
     assert confirm_response.status_code == 200
     assert "Confirm Delete" in confirm_response.text
+
+
+def test_mark_touched_from_ui_redirects_to_program(client) -> None:
+    program = client.post("/programs", json={"name": "Touch UI"}).json()
+    work_item = client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Touch from UI"},
+    ).json()
+
+    response = client.post(f"/work-items/{work_item['id']}/touch", follow_redirects=False)
+    touched = client.get(f"/work-items/{work_item['id']}").json()
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/programs/{program['id']}/view"
+    assert touched["last_touched_at"] is not None

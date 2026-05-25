@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -78,6 +79,19 @@ def update_work_item(
     for field, value in work_item_in.model_dump(exclude_unset=True).items():
         setattr(work_item, field, value)
 
+    db.add(work_item)
+    db.commit()
+    db.refresh(work_item)
+    return work_item
+
+
+@router.post("/work-items/{work_item_id}/mark-touched", response_model=WorkItemRead)
+def mark_work_item_touched(work_item_id: int, db: Session = Depends(get_db)) -> WorkItem:
+    work_item = db.get(WorkItem, work_item_id)
+    if work_item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+
+    work_item.last_touched_at = datetime.now(timezone.utc)
     db.add(work_item)
     db.commit()
     db.refresh(work_item)

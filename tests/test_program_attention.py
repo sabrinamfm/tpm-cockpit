@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.domain.programs import program_attention_state, work_item_is_overdue
+from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
 
 
 def test_program_needs_attention_when_any_work_item_is_blocked() -> None:
@@ -54,3 +54,14 @@ def test_completed_or_cancelled_work_items_are_not_overdue() -> None:
     assert work_item_is_overdue(completed, today=today) is False
     assert work_item_is_overdue(cancelled, today=today) is False
     assert work_item_is_overdue(open_item, today=today) is True
+
+
+def test_open_work_item_is_stale_when_updated_more_than_seven_days_ago() -> None:
+    now = datetime(2026, 5, 25, tzinfo=timezone.utc)
+    stale_item = SimpleNamespace(status="open", due_date=None, updated_at=now - timedelta(days=8))
+    fresh_item = SimpleNamespace(status="open", due_date=None, updated_at=now - timedelta(days=2))
+    completed_item = SimpleNamespace(status="completed", due_date=None, updated_at=now - timedelta(days=30))
+
+    assert work_item_is_stale(stale_item, now=now) is True
+    assert work_item_is_stale(fresh_item, now=now) is False
+    assert work_item_is_stale(completed_item, now=now) is False

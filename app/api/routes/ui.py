@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from html import escape
 from typing import Optional
 from urllib.parse import parse_qs, urlencode
@@ -9,13 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.domain.programs import program_attention_state, work_item_is_overdue
+from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
 from app.models import Program, SourceType, WorkItem
 
 router = APIRouter(tags=["ui"])
 
 PROGRAM_STATUSES = ("active", "paused", "completed", "archived")
 WORK_ITEM_STATUSES = ("open", "in_progress", "blocked", "completed", "cancelled")
+WORK_ITEM_PRIORITIES = ("low", "medium", "high", "critical")
+WORK_ITEM_PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 ATTENTION_STATES = ("Needs attention", "OK")
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -25,10 +27,12 @@ PROGRAM_SORTS = {
 WORK_ITEM_SORT_LABELS = {
     "title": "Title",
     "status": "Status",
+    "priority": "Priority",
     "owner": "Owner",
     "source_type": "Source Type",
     "due_date": "Due Date",
     "updated_at": "Updated",
+    "last_touched_at": "Last Touched",
 }
 
 
@@ -145,13 +149,24 @@ def _page_shell(title: str, body: str) -> str:
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
     }}
-    .menu a {{ display: block; padding: 7px 8px; border-radius: 6px; }}
-    .menu a:hover {{ background: #f2f5f9; text-decoration: none; }}
+    .menu a, .menu button {{
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px 8px;
+      border-radius: 6px;
+      background: transparent;
+      color: #2364aa;
+      text-align: left;
+      font-weight: 400;
+    }}
+    .menu a:hover, .menu button:hover {{ background: #f2f5f9; text-decoration: none; }}
     .pill {{ display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; background: #eef2f7; color: #344054; }}
     .attention {{ background: #fff3cd; color: #7a4d00; }}
     .ok {{ background: #e7f5ec; color: #246b3d; }}
     .blocked-row {{ background: #fff4f3; }}
     .overdue-row {{ background: #fff7ed; }}
+    .stale-row {{ background: #fffbeb; }}
     .detail-grid {{ display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }}
     .placeholder-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; }}
     .placeholder {{ min-height: 86px; }}
@@ -435,12 +450,16 @@ def _work_item_sort_key(work_item: WorkItem, sort: str):
         return (work_item.title.lower(), work_item.id)
     if sort == "status":
         return (work_item.status, work_item.id)
+    if sort == "priority":
+        return (WORK_ITEM_PRIORITY_RANK.get(work_item.priority, 99), work_item.id)
     if sort == "owner":
         return ((work_item.owner or "").lower(), work_item.id)
     if sort == "source_type":
         return ((work_item.source_type.name if work_item.source_type else "").lower(), work_item.id)
     if sort == "due_date":
         return (work_item.due_date or date.max, work_item.id)
+    if sort == "last_touched_at":
+        return (work_item.last_touched_at or datetime.min, work_item.id)
     return (work_item.updated_at, work_item.id)
 
 
@@ -448,6 +467,8 @@ def _work_item_sort_key(work_item: WorkItem, sort: str):
 def program_detail(
     program_id: int,
     work_status_filter: Optional[str] = None,
+    priority_filter: Optional[str] = None,
+    stale_filter: Optional[str] = None,
     owner_filter: Optional[str] = None,
     source_type_filter: Optional[str] = None,
     work_sort: str = "updated_at",
@@ -464,12 +485,22 @@ def program_detail(
 
     if work_status_filter and work_status_filter not in WORK_ITEM_STATUSES:
         work_status_filter = None
+    if priority_filter and priority_filter not in WORK_ITEM_PRIORITIES:
+        priority_filter = None
+    if stale_filter and stale_filter not in ("stale", "not_stale"):
+        stale_filter = None
     if work_sort not in WORK_ITEM_SORT_LABELS:
         work_sort = "updated_at"
 
     work_items = list(program.work_items)
     if work_status_filter:
         work_items = [item for item in work_items if item.status == work_status_filter]
+    if priority_filter:
+        work_items = [item for item in work_items if item.priority == priority_filter]
+    if stale_filter == "stale":
+        work_items = [item for item in work_items if work_item_is_stale(item)]
+    elif stale_filter == "not_stale":
+        work_items = [item for item in work_items if not work_item_is_stale(item)]
     if owner_filter:
         work_items = [item for item in work_items if item.owner == owner_filter]
     if source_type_filter:
@@ -483,6 +514,19 @@ def program_detail(
     work_item_status_options = "".join(
         _select_option(work_status, work_status.replace("_", " ").title(), None)
         for work_status in WORK_ITEM_STATUSES
+    )
+    work_item_priority_options = "".join(
+        _select_option(priority, priority.title(), "medium")
+        for priority in WORK_ITEM_PRIORITIES
+    )
+    priority_filter_options = '<option value="">All priorities</option>' + "".join(
+        _select_option(priority, priority.title(), priority_filter)
+        for priority in WORK_ITEM_PRIORITIES
+    )
+    stale_filter_options = (
+        '<option value="">All touch states</option>'
+        + _select_option("stale", "Stale", stale_filter)
+        + _select_option("not_stale", "Not stale", stale_filter)
     )
     owner_options = '<option value="">All owners</option>' + "".join(
         _select_option(owner, owner, owner_filter)
@@ -501,7 +545,8 @@ def program_detail(
     for work_item in work_items:
         blocked = work_item.status == "blocked"
         overdue = work_item_is_overdue(work_item)
-        row_class = "blocked-row" if blocked else "overdue-row" if overdue else ""
+        stale = work_item_is_stale(work_item)
+        row_class = "blocked-row" if blocked else "overdue-row" if overdue else "stale-row" if stale else ""
         source_name = work_item.source_type.name if work_item.source_type else ""
         link_html = (
             f'<a href="{escape(work_item.link)}" target="_blank" rel="noreferrer">Open</a>'
@@ -511,12 +556,21 @@ def program_detail(
         due_html = escape(_format_date(work_item.due_date))
         if overdue:
             due_html += ' <span class="pill attention">Overdue</span>'
+        next_step_html = escape(work_item.next_step or "")
+        signal_pills = []
+        if stale:
+            signal_pills.append('<span class="pill attention">Stale</span>')
+        if work_item.last_touched_at:
+            signal_pills.append(f'<span class="pill">Touched {_format_datetime(work_item.last_touched_at)}</span>')
+        signals_html = " ".join(signal_pills)
         rows.append(
             f"""
             <tr class="{row_class}">
               <td>{escape(work_item.title)}</td>
               <td><span class="pill">{escape(work_item.status)}</span></td>
+              <td><span class="pill">{escape(work_item.priority)}</span></td>
               <td>{escape(work_item.owner or "")}</td>
+              <td>{next_step_html} {signals_html}</td>
               <td>{escape(source_name)}</td>
               <td>{due_html}</td>
               <td>{link_html}</td>
@@ -526,6 +580,9 @@ def program_detail(
                   <summary class="button secondary">Actions</summary>
                   <div class="menu">
                     <a href="/work-items/{work_item.id}/edit">Edit</a>
+                    <form method="post" action="/work-items/{work_item.id}/touch">
+                      <button type="submit">Mark touched</button>
+                    </form>
                     <a href="/work-items/{work_item.id}/delete/confirm">Delete</a>
                   </div>
                 </details>
@@ -535,7 +592,7 @@ def program_detail(
         )
     work_rows = "".join(rows) or """
       <tr>
-        <td colspan="8" class="muted">No work items match the current view.</td>
+        <td colspan="10" class="muted">No work items match the current view.</td>
       </tr>
     """
 
@@ -582,8 +639,16 @@ def program_detail(
             <select id="work-status" name="status">{work_item_status_options}</select>
           </div>
           <div>
+            <label for="work-priority">Priority</label>
+            <select id="work-priority" name="priority">{work_item_priority_options}</select>
+          </div>
+          <div>
             <label for="work-owner">Owner</label>
             <input id="work-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="work-next-step">Next Step</label>
+            <input id="work-next-step" name="next_step">
           </div>
           <div>
             <label for="work-source-type">Source Type</label>
@@ -614,6 +679,14 @@ def program_detail(
           </select>
         </div>
         <div>
+          <label for="priority_filter">Priority</label>
+          <select id="priority_filter" name="priority_filter">{priority_filter_options}</select>
+        </div>
+        <div>
+          <label for="stale_filter">Stale</label>
+          <select id="stale_filter" name="stale_filter">{stale_filter_options}</select>
+        </div>
+        <div>
           <label for="owner_filter">Owner</label>
           <select id="owner_filter" name="owner_filter">{owner_options}</select>
         </div>
@@ -635,7 +708,9 @@ def program_detail(
           <tr>
             <th>Title</th>
             <th>Status</th>
+            <th>Priority</th>
             <th>Owner</th>
+            <th>Next Step</th>
             <th>Source Type</th>
             <th>Due Date</th>
             <th>Link</th>
@@ -676,7 +751,9 @@ async def create_work_item_from_ui(
         title=title,
         description=parsed.get("description", "").strip() or None,
         status=work_status,
+        priority=parsed.get("priority", "medium") if parsed.get("priority", "medium") in WORK_ITEM_PRIORITIES else "medium",
         owner=parsed.get("owner", "").strip() or None,
+        next_step=parsed.get("next_step", "").strip() or None,
         source_type_id=source_type_id,
         link=parsed.get("link", "").strip() or None,
         due_date=_parse_due_date(parsed.get("due_date", "")),
@@ -700,6 +777,10 @@ def edit_work_item_page(work_item_id: int, db: Session = Depends(get_db)) -> str
         _select_option(work_status, work_status.replace("_", " ").title(), work_item.status)
         for work_status in WORK_ITEM_STATUSES
     )
+    priority_options = "".join(
+        _select_option(priority, priority.title(), work_item.priority)
+        for priority in WORK_ITEM_PRIORITIES
+    )
     body = f"""
     <header>
       <div>
@@ -720,8 +801,16 @@ def edit_work_item_page(work_item_id: int, db: Session = Depends(get_db)) -> str
             <select id="status" name="status">{status_options}</select>
           </div>
           <div>
+            <label for="priority">Priority</label>
+            <select id="priority" name="priority">{priority_options}</select>
+          </div>
+          <div>
             <label for="owner">Owner</label>
             <input id="owner" name="owner" maxlength="120" value="{escape(work_item.owner or "")}">
+          </div>
+          <div>
+            <label for="next_step">Next Step</label>
+            <input id="next_step" name="next_step" value="{escape(work_item.next_step or "")}">
           </div>
           <div>
             <label for="source_type_id">Source Type</label>
@@ -759,20 +848,35 @@ async def update_work_item_from_ui(
     parsed = await _parse_form(request)
     title = parsed.get("title", "").strip()
     work_status = parsed.get("status", work_item.status)
+    priority = parsed.get("priority", work_item.priority)
     source_type_id = _parse_optional_int(parsed.get("source_type_id", ""))
     if source_type_id is not None and db.get(SourceType, source_type_id) is None:
         source_type_id = None
-    if title and work_status in WORK_ITEM_STATUSES:
+    if title and work_status in WORK_ITEM_STATUSES and priority in WORK_ITEM_PRIORITIES:
         work_item.title = title
         work_item.description = parsed.get("description", "").strip() or None
         work_item.status = work_status
+        work_item.priority = priority
         work_item.owner = parsed.get("owner", "").strip() or None
+        work_item.next_step = parsed.get("next_step", "").strip() or None
         work_item.source_type_id = source_type_id
         work_item.link = parsed.get("link", "").strip() or None
         work_item.due_date = _parse_due_date(parsed.get("due_date", ""))
         db.add(work_item)
         db.commit()
 
+    return RedirectResponse(f"/programs/{work_item.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/work-items/{work_item_id}/touch", include_in_schema=False)
+def mark_work_item_touched_from_ui(work_item_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    work_item = db.get(WorkItem, work_item_id)
+    if work_item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+
+    work_item.last_touched_at = datetime.now(timezone.utc)
+    db.add(work_item)
+    db.commit()
     return RedirectResponse(f"/programs/{work_item.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 

@@ -1,10 +1,11 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Protocol
 
 
 class WorkItemLike(Protocol):
     status: str
     due_date: Optional[date]
+    updated_at: datetime
 
 
 class ProgramLike(Protocol):
@@ -19,6 +20,16 @@ def work_item_is_overdue(work_item: WorkItemLike, today: Optional[date] = None) 
     if work_item.status in ("completed", "cancelled"):
         return False
     return work_item.due_date < (today or date.today())
+
+
+def work_item_is_stale(work_item: WorkItemLike, now: Optional[datetime] = None) -> bool:
+    if work_item.status in ("completed", "cancelled"):
+        return False
+    current_time = now or datetime.now(timezone.utc)
+    updated_at = work_item.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    return updated_at < current_time - timedelta(days=7)
 
 
 def program_attention_state(program: ProgramLike, now: Optional[datetime] = None) -> str:
