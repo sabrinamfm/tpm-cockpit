@@ -39,3 +39,38 @@ def test_program_ui_filters_by_status(client) -> None:
     assert response.status_code == 200
     assert "Paused Program" in response.text
     assert "Active Program" not in response.text
+
+
+def test_program_detail_page_shows_work_items_grouped_by_status(client) -> None:
+    program = client.post("/programs", json={"name": "Program With Work"}).json()
+    client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Open item", "status": "open"},
+    )
+    client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Blocked item", "status": "blocked"},
+    )
+
+    response = client.get(f"/programs/{program['id']}/view")
+
+    assert response.status_code == 200
+    assert "Open" in response.text
+    assert "Blocked" in response.text
+    assert "Open item" in response.text
+    assert "Blocked item" in response.text
+    assert "Create Work Item" in response.text
+
+
+def test_program_list_shows_attention_from_blocked_work_item(client) -> None:
+    program = client.post("/programs", json={"name": "Needs Follow Up"}).json()
+    client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Blocked item", "status": "blocked"},
+    )
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Needs Follow Up" in response.text
+    assert "Needs attention" in response.text

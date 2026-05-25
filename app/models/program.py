@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -30,4 +30,9 @@ class Program(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+    work_items: Mapped[list["WorkItem"]] = relationship(
+        "WorkItem",
+        back_populates="program",
+        cascade="all, delete-orphan",
     )

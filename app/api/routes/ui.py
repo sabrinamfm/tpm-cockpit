@@ -1,20 +1,22 @@
 from html import escape
+from datetime import date
 from typing import Optional
 from urllib.parse import parse_qs, urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.domain.programs import program_attention_state
-from app.models import Program
+from app.domain.programs import program_attention_state, work_item_is_overdue
+from app.models import Program, WorkItem
 
 router = APIRouter(tags=["ui"])
 
 PROGRAM_STATUSES = ("active", "paused", "completed", "archived")
-ATTENTION_STATES = ("Needs attention", "Paused", "Archived", "OK")
+WORK_ITEM_STATUSES = ("open", "in_progress", "blocked", "completed", "cancelled")
+ATTENTION_STATES = ("Needs attention", "OK")
 SORTS = {
     "name": Program.name.asc(),
     "status": Program.status.asc(),
@@ -24,6 +26,16 @@ SORTS = {
 
 def _format_datetime(value) -> str:
     return value.strftime("%Y-%m-%d %H:%M") if value else ""
+
+
+def _format_date(value) -> str:
+    return value.isoformat() if value else ""
+
+
+async def _parse_form(request: Request) -> dict[str, str]:
+    form_data = await request.body()
+    parsed = parse_qs(form_data.decode())
+    return {key: values[0] for key, values in parsed.items()}
 
 
 def _select_option(value: str, label: str, selected: Optional[str]) -> str:
@@ -101,10 +113,15 @@ def _page_shell(title: str, body: str) -> str:
     .detail-grid {{ display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }}
     .placeholder-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; }}
     .placeholder {{ min-height: 86px; }}
+    .work-grid {{ display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 14px; }}
+    .work-item {{ border: 1px solid #dde3ec; border-radius: 8px; padding: 12px; margin: 10px 0; background: #ffffff; }}
+    .work-item.blocked {{ border-color: #d92d20; background: #fff4f3; }}
+    .work-item.overdue {{ border-color: #dc6803; background: #fff7ed; }}
+    .compact-fields {{ display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 8px; }}
     @media (max-width: 860px) {{
       header, .layout {{ display: block; }}
       .panel {{ margin-bottom: 18px; }}
-      .filters, .detail-grid, .placeholder-grid {{ grid-template-columns: 1fr; }}
+      .filters, .detail-grid, .placeholder-grid, .work-grid, .compact-fields {{ grid-template-columns: 1fr; }}
       th:nth-child(2), td:nth-child(2) {{ display: none; }}
     }}
   </style>
@@ -132,7 +149,7 @@ def program_ui(
     if sort not in SORTS:
         sort = "updated_at"
 
-    statement = select(Program)
+    statement = select(Program).options(selectinload(Program.work_items))
     if status_filter:
         statement = statement.where(Program.status == status_filter)
     statement = statement.order_by(SORTS[sort], Program.id.desc())
@@ -254,12 +271,11 @@ def program_ui(
 
 @router.post("/programs/create", include_in_schema=False)
 async def create_program_from_ui(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
-    form_data = await request.body()
-    parsed = parse_qs(form_data.decode())
+    parsed = await _parse_form(request)
 
-    name = parsed.get("name", [""])[0].strip()
-    description = parsed.get("description", [""])[0].strip() or None
-    program_status = parsed.get("status", ["active"])[0]
+    name = parsed.get("name", "").strip()
+    description = parsed.get("description", "").strip() or None
+    program_status = parsed.get("status", "active")
     if not name or program_status not in PROGRAM_STATUSES:
         return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -280,12 +296,93 @@ def delete_program_from_ui(program_id: int, db: Session = Depends(get_db)) -> Re
 
 @router.get("/programs/{program_id}/view", response_class=HTMLResponse, include_in_schema=False)
 def program_detail(program_id: int, db: Session = Depends(get_db)) -> str:
-    program = db.get(Program, program_id)
+    program = db.scalars(
+        select(Program)
+        .options(selectinload(Program.work_items))
+        .where(Program.id == program_id)
+    ).one_or_none()
     if program is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
 
     attention = program_attention_state(program)
     attention_class = "ok" if attention == "OK" else "attention"
+    work_item_status_options = "".join(
+        _select_option(work_status, work_status.replace("_", " ").title(), None)
+        for work_status in WORK_ITEM_STATUSES
+    )
+    work_item_sections = []
+    for work_status in WORK_ITEM_STATUSES:
+        matching_items = [
+            work_item
+            for work_item in sorted(
+                program.work_items,
+                key=lambda item: (item.due_date or date.max, item.id),
+            )
+            if work_item.status == work_status
+        ]
+        cards = []
+        for work_item in matching_items:
+            blocked = work_item.status == "blocked"
+            overdue = work_item_is_overdue(work_item)
+            classes = "work-item"
+            if blocked:
+                classes += " blocked"
+            elif overdue:
+                classes += " overdue"
+            markers = []
+            if blocked:
+                markers.append('<span class="pill attention">Blocked</span>')
+            if overdue:
+                markers.append('<span class="pill attention">Overdue</span>')
+            marker_html = " ".join(markers)
+            status_options = "".join(
+                _select_option(status_value, status_value.replace("_", " ").title(), work_item.status)
+                for status_value in WORK_ITEM_STATUSES
+            )
+            cards.append(
+                f"""
+                <article class="{classes}">
+                  <form method="post" action="/work-items/{work_item.id}/update">
+                    <label for="work-title-{work_item.id}">Title</label>
+                    <input id="work-title-{work_item.id}" name="title" required maxlength="200" value="{escape(work_item.title)}">
+                    <label for="work-description-{work_item.id}">Description</label>
+                    <textarea id="work-description-{work_item.id}" name="description">{escape(work_item.description or "")}</textarea>
+                    <div class="compact-fields">
+                      <div>
+                        <label for="work-status-{work_item.id}">Status</label>
+                        <select id="work-status-{work_item.id}" name="status">{status_options}</select>
+                      </div>
+                      <div>
+                        <label for="work-owner-{work_item.id}">Owner</label>
+                        <input id="work-owner-{work_item.id}" name="owner" maxlength="120" value="{escape(work_item.owner or "")}">
+                      </div>
+                      <div>
+                        <label for="work-due-{work_item.id}">Due Date</label>
+                        <input id="work-due-{work_item.id}" name="due_date" type="date" value="{escape(_format_date(work_item.due_date))}">
+                      </div>
+                      <div>
+                        <label>Signals</label>
+                        <div>{marker_html or '<span class="pill ok">On track</span>'}</div>
+                      </div>
+                    </div>
+                    <div class="actions">
+                      <button type="submit">Save</button>
+                    </div>
+                  </form>
+                  <form method="post" action="/work-items/{work_item.id}/delete" class="actions">
+                    <button class="danger" type="submit">Delete</button>
+                  </form>
+                </article>
+                """
+            )
+        work_item_sections.append(
+            f"""
+            <section class="panel">
+              <h3>{escape(work_status.replace("_", " ").title())}</h3>
+              {''.join(cards) or '<div class="muted">No work items in this state.</div>'}
+            </section>
+            """
+        )
     placeholder_sections = "".join(
         f"""
         <section class="panel placeholder">
@@ -293,7 +390,7 @@ def program_detail(program_id: int, db: Session = Depends(get_db)) -> str:
           <div class="muted">Not implemented yet.</div>
         </section>
         """
-        for title in ("Work Items", "Risks", "Dependencies", "Decisions", "Notes")
+        for title in ("Risks", "Dependencies", "Decisions", "Notes")
     )
     body = f"""
     <header>
@@ -313,8 +410,108 @@ def program_detail(program_id: int, db: Session = Depends(get_db)) -> str:
         <div><strong>Updated</strong><br>{escape(_format_datetime(program.updated_at))}</div>
       </div>
     </section>
+    <section class="panel">
+      <h2>Work Items</h2>
+      <form method="post" action="/programs/{program.id}/work-items/create">
+        <label for="work-title">Title</label>
+        <input id="work-title" name="title" required maxlength="200">
+        <label for="work-description">Description</label>
+        <textarea id="work-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="work-status">Status</label>
+            <select id="work-status" name="status">{work_item_status_options}</select>
+          </div>
+          <div>
+            <label for="work-owner">Owner</label>
+            <input id="work-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="work-due-date">Due Date</label>
+            <input id="work-due-date" name="due_date" type="date">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Create Work Item</button>
+        </div>
+      </form>
+    </section>
+    <div class="work-grid">
+      {''.join(work_item_sections)}
+    </div>
     <div class="placeholder-grid">
       {placeholder_sections}
     </div>
     """
     return _page_shell(program.name, body)
+
+
+def _parse_due_date(value: str) -> Optional[date]:
+    if not value:
+        return None
+    return date.fromisoformat(value)
+
+
+@router.post("/programs/{program_id}/work-items/create", include_in_schema=False)
+async def create_work_item_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    work_status = parsed.get("status", "open")
+    if not title or work_status not in WORK_ITEM_STATUSES:
+        return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+    work_item = WorkItem(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        status=work_status,
+        owner=parsed.get("owner", "").strip() or None,
+        due_date=_parse_due_date(parsed.get("due_date", "")),
+    )
+    db.add(work_item)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/work-items/{work_item_id}/update", include_in_schema=False)
+async def update_work_item_from_ui(
+    work_item_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    work_item = db.get(WorkItem, work_item_id)
+    if work_item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    work_status = parsed.get("status", work_item.status)
+    if title and work_status in WORK_ITEM_STATUSES:
+        work_item.title = title
+        work_item.description = parsed.get("description", "").strip() or None
+        work_item.status = work_status
+        work_item.owner = parsed.get("owner", "").strip() or None
+        work_item.due_date = _parse_due_date(parsed.get("due_date", ""))
+        db.add(work_item)
+        db.commit()
+
+    return RedirectResponse(f"/programs/{work_item.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/work-items/{work_item_id}/delete", include_in_schema=False)
+def delete_work_item_from_ui(work_item_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    work_item = db.get(WorkItem, work_item_id)
+    if work_item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+
+    program_id = work_item.program_id
+    db.delete(work_item)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
