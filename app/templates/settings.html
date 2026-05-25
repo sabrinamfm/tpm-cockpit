@@ -27,6 +27,11 @@
           <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
           <label for="ps_color">Color</label>
           <input id="ps_color" name="color" type="color" value="#6b7280">
+          <label for="ps_operational">Operational</label>
+          <select id="ps_operational" name="is_operational">
+            <option value="0" selected>No</option>
+            <option value="1">Yes</option>
+          </select>
           <div class="actions">
             <button type="submit">Create Status</button>
           </div>
@@ -34,10 +39,11 @@
       </div>
     </details>
   </div>
+  <p class="muted" style="margin:0 0 12px;font-size:13px">Operational statuses participate in attention and health calculations.</p>
   <table id="tbl-program-statuses">
     <thead>
       <tr>
-        <th></th><th>Name</th><th>Slug</th><th>Color</th><th>Default</th><th>Actions</th>
+        <th></th><th>Name</th><th>Slug</th><th>Color</th><th>Default</th><th>Operational</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -45,7 +51,7 @@
         {% if edit_status_id == ps.id %}
           <tr data-id="{{ ps.id }}">
             <td></td>
-            <td colspan="5">
+            <td colspan="6">
               <form method="post" action="/settings/program-statuses/{{ ps.id }}/update" style="display:flex;gap:8px;align-items:flex-end;padding:4px 0;flex-wrap:wrap">
                 <div>
                   <label for="edit_name_{{ ps.id }}" style="margin:0 0 4px">Name</label>
@@ -66,6 +72,13 @@
                     <option value="0"{% if not ps.is_default %} selected{% endif %}>No</option>
                   </select>
                 </div>
+                <div>
+                  <label style="margin:0 0 4px">Operational</label>
+                  <select name="is_operational">
+                    <option value="1"{% if ps.is_operational %} selected{% endif %}>Yes</option>
+                    <option value="0"{% if not ps.is_operational %} selected{% endif %}>No</option>
+                  </select>
+                </div>
                 <div class="actions" style="margin:0">
                   <button type="submit">Save</button>
                   <a class="button secondary" href="/settings#program-statuses">Cancel</a>
@@ -84,6 +97,7 @@
             <td><code style="font-size:12px">{{ ps.slug }}</code></td>
             <td>{{ ps.color }}</td>
             <td>{{ "✓" if ps.is_default else "—" }}</td>
+            <td>{{ "✓" if ps.is_operational else "—" }}</td>
             <td>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <a class="button secondary" href="/settings?edit_status_id={{ ps.id }}#program-statuses">Edit</a>
@@ -95,7 +109,7 @@
           </tr>
         {% endif %}
       {% else %}
-        <tr><td colspan="6" class="muted">No program statuses yet.</td></tr>
+        <tr><td colspan="7" class="muted">No program statuses yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

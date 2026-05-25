@@ -11,6 +11,7 @@ class ProgramStatusCreate(BaseModel):
     sort_order: int = Field(default=0, ge=0)
     is_active: bool = True
     is_default: bool = False
+    is_operational: bool = False
 
 
 class ProgramStatusUpdate(BaseModel):
@@ -19,6 +20,7 @@ class ProgramStatusUpdate(BaseModel):
     sort_order: Optional[int] = Field(default=None, ge=0)
     is_active: Optional[bool] = None
     is_default: Optional[bool] = None
+    is_operational: Optional[bool] = None
 
 
 class ProgramStatusRead(BaseModel):
@@ -29,6 +31,7 @@ class ProgramStatusRead(BaseModel):
     sort_order: int
     is_active: bool
     is_default: bool
+    is_operational: bool
     created_at: datetime
     updated_at: datetime
 

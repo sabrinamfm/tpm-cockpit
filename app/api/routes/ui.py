@@ -46,7 +46,7 @@ DEPENDENCY_TYPES = (
 DEPENDENCY_STATUSES = ("open", "in_progress", "confirmed", "blocked", "resolved", "cancelled")
 BLOCKING_LEVELS = ("low", "medium", "high", "critical")
 BLOCKING_LEVEL_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-ATTENTION_STATES = ("Needs attention", "OK")
+ATTENTION_STATES = ("Needs attention", "OK", "Inactive")
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
     "updated_at": Program.updated_at.desc(),
@@ -780,11 +780,12 @@ async def create_program_status_from_ui(
     name = parsed.get("name", "").strip()
     slug = parsed.get("slug", "").strip().lower().replace(" ", "-")
     color = parsed.get("color", "#6b7280").strip() or "#6b7280"
+    is_operational = parsed.get("is_operational", "0") == "1"
     if name and slug:
         existing = db.scalar(select(ProgramStatus).where(ProgramStatus.slug == slug))
         if existing is None:
             max_order = db.scalar(select(func.max(ProgramStatus.sort_order))) or -1
-            db.add(ProgramStatus(name=name, slug=slug, color=color, sort_order=max_order + 1))
+            db.add(ProgramStatus(name=name, slug=slug, color=color, sort_order=max_order + 1, is_operational=is_operational))
             db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -811,6 +812,7 @@ async def update_program_status_from_ui(
         slug = parsed.get("slug", "").strip().lower().replace(" ", "-") or ps.slug
         color = parsed.get("color", "").strip() or ps.color
         is_default = parsed.get("is_default", "0") == "1"
+        is_operational = parsed.get("is_operational", "0") == "1"
         if name:
             slug_conflict = db.scalar(
                 select(ProgramStatus).where(ProgramStatus.slug == slug, ProgramStatus.id != status_id)
@@ -824,6 +826,7 @@ async def update_program_status_from_ui(
             ps.name = name
             ps.color = color
             ps.is_default = is_default
+            ps.is_operational = is_operational
             db.add(ps)
             db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)

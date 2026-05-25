@@ -2,7 +2,7 @@
 {% block title %}{{ program.name }}{% endblock %}
 {% block content %}
 {% set attention = program_attention_state(program) %}
-{% set attention_class = "ok" if attention == "OK" else "attention" %}
+{% set attention_class = "ok" if attention == "OK" else ("attention" if attention == "Needs attention" else "") %}
 <header>
   <div>
     <h1>{{ program.name }}</h1>

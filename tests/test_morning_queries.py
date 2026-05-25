@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
@@ -35,9 +35,10 @@ def db(tmp_path):
     Base.metadata.drop_all(engine)
 
 
-def _program(db, name="Test Program") -> Program:
+def _program(db, name="Test Program", status_slug="active") -> Program:
     status = db.execute(
-        __import__("sqlalchemy").text("SELECT id FROM program_statuses WHERE slug = 'active' LIMIT 1")
+        text("SELECT id FROM program_statuses WHERE slug = :slug LIMIT 1"),
+        {"slug": status_slug},
     ).fetchone()
     p = Program(name=name, status_id=status[0])
     db.add(p)
@@ -322,3 +323,49 @@ def test_get_recently_updated_programs_ordered_by_updated_at(db) -> None:
 
     assert result[0].name == "Recent"
     assert result[1].name == "Old"
+
+
+# ── operational filtering ─────────────────────────────────────────────────────
+
+def test_blocked_work_item_from_non_operational_program_excluded(db) -> None:
+    active_p = _program(db, name="Active Program", status_slug="active")
+    _work_item(db, active_p, title="Operational blocked", status="blocked")
+    archived_p = _program(db, name="Archived Program", status_slug="archived")
+    _work_item(db, archived_p, title="Archived blocked", status="blocked")
+    db.commit()
+
+    result = get_blocked_work_items(db)
+
+    titles = {item.title for item in result}
+    assert "Operational blocked" in titles
+    assert "Archived blocked" not in titles
+
+
+def test_overdue_work_item_from_non_operational_program_excluded(db) -> None:
+    today = date(2026, 5, 25)
+    active_p = _program(db, name="Active Program", status_slug="active")
+    _work_item(db, active_p, title="Op overdue", status="open", due_date=date(2026, 5, 20))
+    completed_p = _program(db, name="Completed Program", status_slug="completed")
+    _work_item(db, completed_p, title="Completed overdue", status="open", due_date=date(2026, 5, 20))
+    db.commit()
+
+    result = get_overdue_work_items(db, today=today)
+
+    titles = {item.title for item in result}
+    assert "Op overdue" in titles
+    assert "Completed overdue" not in titles
+
+
+def test_get_programs_needing_attention_excludes_non_operational(db) -> None:
+    today = date(2026, 5, 25)
+    active_p = _program(db, name="Active", status_slug="active")
+    _work_item(db, active_p, status="blocked")
+    paused_p = _program(db, name="Paused", status_slug="paused")
+    _work_item(db, paused_p, status="blocked")
+    db.commit()
+
+    result = get_programs_needing_attention(db, today=today)
+
+    names = {p.name for p in result}
+    assert "Active" in names
+    assert "Paused" not in names

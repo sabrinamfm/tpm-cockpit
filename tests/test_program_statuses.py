@@ -19,6 +19,15 @@ def test_default_active_status_is_marked_default(client) -> None:
     assert active["is_default"] is True
 
 
+def test_default_is_operational_values(client) -> None:
+    statuses = {s["slug"]: s for s in client.get("/program-statuses").json()}
+
+    assert statuses["active"]["is_operational"] is True
+    assert statuses["paused"]["is_operational"] is False
+    assert statuses["completed"]["is_operational"] is False
+    assert statuses["archived"]["is_operational"] is False
+
+
 def test_seeding_is_idempotent(client) -> None:
     # Hitting the index page triggers seed_default_program_statuses a second time
     client.get("/")

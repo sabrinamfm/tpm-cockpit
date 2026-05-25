@@ -6,10 +6,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 DEFAULT_PROGRAM_STATUSES = [
-    {"name": "Active", "slug": "active", "color": "#16a34a", "sort_order": 1, "is_active": True, "is_default": True},
-    {"name": "Paused", "slug": "paused", "color": "#d97706", "sort_order": 2, "is_active": True, "is_default": False},
-    {"name": "Completed", "slug": "completed", "color": "#2364aa", "sort_order": 3, "is_active": True, "is_default": False},
-    {"name": "Archived", "slug": "archived", "color": "#6b7280", "sort_order": 4, "is_active": True, "is_default": False},
+    {"name": "Active", "slug": "active", "color": "#16a34a", "sort_order": 1, "is_active": True, "is_default": True, "is_operational": True},
+    {"name": "Paused", "slug": "paused", "color": "#d97706", "sort_order": 2, "is_active": True, "is_default": False, "is_operational": False},
+    {"name": "Completed", "slug": "completed", "color": "#2364aa", "sort_order": 3, "is_active": True, "is_default": False, "is_operational": False},
+    {"name": "Archived", "slug": "archived", "color": "#6b7280", "sort_order": 4, "is_active": True, "is_default": False, "is_operational": False},
 ]
 
 
@@ -23,6 +23,7 @@ class ProgramStatus(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    is_operational: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

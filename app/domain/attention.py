@@ -16,9 +16,14 @@ class DependencyLike(Protocol):
     last_confirmation_at: Optional[datetime]
 
 
+class ProgramStatusLike(Protocol):
+    is_operational: bool
+
+
 class ProgramLike(Protocol):
     work_items: list[WorkItemLike]
     dependencies: list[DependencyLike]
+    program_status: ProgramStatusLike
 
 
 def work_item_is_overdue(item: WorkItemLike, today: Optional[date] = None) -> bool:
@@ -52,6 +57,8 @@ def dependency_is_stale(dep: DependencyLike, now: Optional[datetime] = None) -> 
 
 
 def program_needs_attention(program: ProgramLike, now: Optional[datetime] = None) -> bool:
+    if not program.program_status.is_operational:
+        return False
     current_date = (now or datetime.now(timezone.utc)).date()
     if any(item.status == "blocked" for item in program.work_items):
         return True

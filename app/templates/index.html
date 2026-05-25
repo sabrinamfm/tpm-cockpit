@@ -84,7 +84,7 @@
       <tbody>
         {% for program in programs %}
           {% set attention = program_attention_state(program) %}
-          {% set attention_class = "ok" if attention == "OK" else "attention" %}
+          {% set attention_class = "ok" if attention == "OK" else ("attention" if attention == "Needs attention" else "") %}
           <tr>
             <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
             <td>{{ program.description or "" }}</td>
