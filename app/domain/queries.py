@@ -54,6 +54,17 @@ def get_stale_work_items(db: Session, now: Optional[datetime] = None) -> list[Wo
     )
 
 
+def get_blocked_dependencies(db: Session) -> list[Dependency]:
+    return list(
+        db.scalars(
+            select(Dependency)
+            .options(selectinload(Dependency.program))
+            .where(Dependency.status == "blocked")
+            .order_by(Dependency.updated_at.asc())
+        )
+    )
+
+
 def get_critical_dependencies(db: Session) -> list[Dependency]:
     return list(
         db.scalars(

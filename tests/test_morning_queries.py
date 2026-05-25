@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.domain.queries import (
+    get_blocked_dependencies,
     get_blocked_work_items,
     get_critical_dependencies,
     get_overdue_work_items,
@@ -65,6 +66,39 @@ def _dependency(db, program: Program, **kwargs) -> Dependency:
     db.add(dep)
     db.flush()
     return dep
+
+
+# ── get_blocked_dependencies ─────────────────────────────────────────────────
+
+def test_get_blocked_dependencies_returns_blocked(db) -> None:
+    p = _program(db)
+    _dependency(db, p, title="Blocked dep", status="blocked")
+    _dependency(db, p, title="Open dep", status="open")
+    db.commit()
+
+    result = get_blocked_dependencies(db)
+
+    assert len(result) == 1
+    assert result[0].title == "Blocked dep"
+
+
+def test_get_blocked_dependencies_empty(db) -> None:
+    p = _program(db)
+    _dependency(db, p, status="open")
+    db.commit()
+
+    assert get_blocked_dependencies(db) == []
+
+
+def test_get_blocked_dependencies_does_not_exclude_any_blocking_level(db) -> None:
+    p = _program(db)
+    _dependency(db, p, title="Low blocked", status="blocked", blocking_level="low")
+    _dependency(db, p, title="Critical blocked", status="blocked", blocking_level="critical")
+    db.commit()
+
+    result = get_blocked_dependencies(db)
+
+    assert len(result) == 2
 
 
 # ── get_blocked_work_items ────────────────────────────────────────────────────

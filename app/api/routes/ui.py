@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.domain.dependencies import dependency_is_stale
 from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
 from app.domain.queries import (
+    get_blocked_dependencies,
     get_blocked_work_items,
     get_critical_dependencies,
     get_overdue_work_items,
@@ -862,6 +863,7 @@ def morning_view(request: Request, db: Session = Depends(get_db)) -> HTMLRespons
             "today": date.today(),
             "programs_needing_attention": get_programs_needing_attention(db),
             "blocked_work_items": get_blocked_work_items(db),
+            "blocked_dependencies": get_blocked_dependencies(db),
             "overdue_work_items": get_overdue_work_items(db),
             "stale_work_items": get_stale_work_items(db),
             "critical_dependencies": get_critical_dependencies(db),

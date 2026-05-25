@@ -56,6 +56,30 @@
 </section>
 
 <section class="morning-section">
+  <h2>Blocked Dependencies <span class="section-count">({{ blocked_dependencies|length }})</span></h2>
+  {% if blocked_dependencies %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Blocking Level</th><th>Owner</th><th>Updated</th></tr>
+    </thead>
+    <tbody>
+      {% for dep in blocked_dependencies %}
+      <tr class="blocked-row">
+        <td><a href="/programs/{{ dep.program_id }}/view">{{ dep.program.name }}</a></td>
+        <td>{{ dep.title }}</td>
+        <td>{{ dep.blocking_level }}</td>
+        <td class="muted">{{ dep.owner or "—" }}</td>
+        <td class="muted">{{ dep.updated_at | format_datetime }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
   <h2>Overdue Work Items <span class="section-count">({{ overdue_work_items|length }})</span></h2>
   {% if overdue_work_items %}
   <table>

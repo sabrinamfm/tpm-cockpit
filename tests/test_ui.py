@@ -1,3 +1,31 @@
+def test_morning_view_loads(client) -> None:
+    response = client.get("/morning")
+
+    assert response.status_code == 200
+    assert "Morning View" in response.text
+    assert "Blocked Work Items" in response.text
+    assert "Blocked Dependencies" in response.text
+    assert "Overdue Work Items" in response.text
+    assert "Stale Work Items" in response.text
+    assert "Critical Dependencies" in response.text
+    assert "Stale Dependencies" in response.text
+    assert "Recently Updated Programs" in response.text
+
+
+def test_morning_view_shows_blocked_dependency(client) -> None:
+    program = client.post("/programs", json={"name": "Platform Migration", "status": "active"}).json()
+    client.post(
+        f"/programs/{program['id']}/dependencies/create",
+        data={"title": "Infra approval", "dependency_type": "approval", "status": "blocked", "blocking_level": "high"},
+    )
+
+    response = client.get("/morning")
+
+    assert response.status_code == 200
+    assert "Infra approval" in response.text
+    assert "Platform Migration" in response.text
+
+
 def test_program_ui_loads(client) -> None:
     response = client.get("/")
 
