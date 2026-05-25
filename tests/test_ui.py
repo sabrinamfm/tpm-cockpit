@@ -77,6 +77,31 @@ def test_program_detail_page_shows_work_items_grouped_by_status(client) -> None:
     assert "Create Work Item" in response.text
 
 
+def test_new_work_item_form_is_collapsed_by_default(client) -> None:
+    program = client.post("/programs", json={"name": "Collapsed Form"}).json()
+
+    default_response = client.get(f"/programs/{program['id']}/view")
+    opened_response = client.get(f"/programs/{program['id']}/view?show_new_work_item=1")
+
+    assert default_response.status_code == 200
+    assert '<details id="new-work-item" class="collapsible-panel">' in default_response.text
+    assert '<details id="new-work-item" class="collapsible-panel" open>' in opened_response.text
+
+
+def test_new_work_item_validation_reopens_form_with_error(client) -> None:
+    program = client.post("/programs", json={"name": "Validation Form"}).json()
+
+    response = client.post(
+        f"/programs/{program['id']}/work-items/create",
+        data={"title": "", "status": "open"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert '<details id="new-work-item" class="collapsible-panel" open>' in response.text
+    assert "Title and status are required." in response.text
+
+
 def test_program_list_shows_attention_from_blocked_work_item(client) -> None:
     program = client.post("/programs", json={"name": "Needs Follow Up"}).json()
     client.post(
@@ -136,8 +161,23 @@ def test_work_item_ui_sort_control_and_delete_confirmation(client) -> None:
     assert "https://example.com/source" in detail_response.text
     assert f"/work-items/{work_item['id']}/touch" in detail_response.text
     assert f"/work-items/{work_item['id']}/delete/confirm" in detail_response.text
+    assert f"/programs/{program['id']}/view?edit_work_item_id={work_item['id']}#edit-work-item" in detail_response.text
     assert confirm_response.status_code == 200
     assert "Confirm Delete" in confirm_response.text
+
+
+def test_work_item_edit_panel_opens_inline(client) -> None:
+    program = client.post("/programs", json={"name": "Inline Edit"}).json()
+    work_item = client.post(
+        f"/programs/{program['id']}/work-items",
+        json={"title": "Inline item"},
+    ).json()
+
+    response = client.get(f"/programs/{program['id']}/view?edit_work_item_id={work_item['id']}")
+
+    assert response.status_code == 200
+    assert '<details id="edit-work-item" class="collapsible-panel" open>' in response.text
+    assert "Inline item" in response.text
 
 
 def test_mark_touched_from_ui_redirects_to_program(client) -> None:

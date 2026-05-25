@@ -171,6 +171,20 @@ def _page_shell(title: str, body: str) -> str:
     .placeholder-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; }}
     .placeholder {{ min-height: 86px; }}
     .compact-fields {{ display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 8px; }}
+    .collapsible-panel {{
+      margin-bottom: 16px;
+      border: 1px solid #d9dee7;
+      border-radius: 8px;
+      background: #ffffff;
+    }}
+    .collapsible-panel > summary {{
+      display: inline-flex;
+      margin: 18px;
+      list-style: none;
+    }}
+    .collapsible-panel > summary::-webkit-details-marker {{ display: none; }}
+    .collapsible-body {{ padding: 0 18px 18px; }}
+    .error {{ color: #b42318; font-weight: 650; margin-bottom: 10px; }}
     @media (max-width: 900px) {{
       header, .layout {{ display: block; }}
       .panel {{ margin-bottom: 18px; }}
@@ -472,6 +486,9 @@ def program_detail(
     owner_filter: Optional[str] = None,
     source_type_filter: Optional[str] = None,
     work_sort: str = "updated_at",
+    show_new_work_item: Optional[str] = None,
+    work_item_error: Optional[str] = None,
+    edit_work_item_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ) -> str:
     program = db.scalars(
@@ -540,6 +557,12 @@ def program_detail(
         _select_option(value, label, work_sort)
         for value, label in WORK_ITEM_SORT_LABELS.items()
     )
+    edit_work_item = None
+    if edit_work_item_id is not None:
+        edit_work_item = next(
+            (item for item in program.work_items if item.id == edit_work_item_id),
+            None,
+        )
 
     rows = []
     for work_item in work_items:
@@ -579,7 +602,7 @@ def program_detail(
                 <details class="action-menu">
                   <summary class="button secondary">Actions</summary>
                   <div class="menu">
-                    <a href="/work-items/{work_item.id}/edit">Edit</a>
+                    <a href="/programs/{program.id}/view?edit_work_item_id={work_item.id}#edit-work-item">Edit</a>
                     <form method="post" action="/work-items/{work_item.id}/touch">
                       <button type="submit">Mark touched</button>
                     </form>
@@ -595,6 +618,65 @@ def program_detail(
         <td colspan="10" class="muted">No work items match the current view.</td>
       </tr>
     """
+    new_work_item_open = " open" if show_new_work_item == "1" or work_item_error else ""
+    error_html = f'<div class="error">{escape(work_item_error)}</div>' if work_item_error else ""
+    edit_panel = ""
+    if edit_work_item is not None:
+        edit_status_options = "".join(
+            _select_option(work_status, work_status.replace("_", " ").title(), edit_work_item.status)
+            for work_status in WORK_ITEM_STATUSES
+        )
+        edit_priority_options = "".join(
+            _select_option(priority, priority.title(), edit_work_item.priority)
+            for priority in WORK_ITEM_PRIORITIES
+        )
+        edit_panel = f"""
+        <details id="edit-work-item" class="collapsible-panel" open>
+          <summary class="button secondary">Edit Work Item</summary>
+          <div class="collapsible-body">
+            <form method="post" action="/work-items/{edit_work_item.id}/update">
+              <label for="edit-title">Title</label>
+              <input id="edit-title" name="title" required maxlength="200" value="{escape(edit_work_item.title)}">
+              <label for="edit-description">Description</label>
+              <textarea id="edit-description" name="description">{escape(edit_work_item.description or "")}</textarea>
+              <div class="compact-fields">
+                <div>
+                  <label for="edit-status">Status</label>
+                  <select id="edit-status" name="status">{edit_status_options}</select>
+                </div>
+                <div>
+                  <label for="edit-priority">Priority</label>
+                  <select id="edit-priority" name="priority">{edit_priority_options}</select>
+                </div>
+                <div>
+                  <label for="edit-owner">Owner</label>
+                  <input id="edit-owner" name="owner" maxlength="120" value="{escape(edit_work_item.owner or "")}">
+                </div>
+                <div>
+                  <label for="edit-next-step">Next Step</label>
+                  <input id="edit-next-step" name="next_step" value="{escape(edit_work_item.next_step or "")}">
+                </div>
+                <div>
+                  <label for="edit-source-type-id">Source Type</label>
+                  <select id="edit-source-type-id" name="source_type_id">{_source_type_options(source_types, edit_work_item.source_type_id)}</select>
+                </div>
+                <div>
+                  <label for="edit-due-date">Due Date</label>
+                  <input id="edit-due-date" name="due_date" type="date" value="{escape(_format_date(edit_work_item.due_date))}">
+                </div>
+                <div>
+                  <label for="edit-link">Link</label>
+                  <input id="edit-link" name="link" maxlength="500" value="{escape(edit_work_item.link or "")}">
+                </div>
+              </div>
+              <div class="actions">
+                <button type="submit">Save Work Item</button>
+                <a class="button secondary" href="/programs/{program.id}/view">Cancel</a>
+              </div>
+            </form>
+          </div>
+        </details>
+        """
 
     placeholder_sections = "".join(
         f"""
@@ -627,49 +709,55 @@ def program_detail(
       </div>
     </section>
     <section class="panel">
-      <h2>New Work Item</h2>
-      <form method="post" action="/programs/{program.id}/work-items/create">
-        <label for="work-title">Title</label>
-        <input id="work-title" name="title" required maxlength="200">
-        <label for="work-description">Description</label>
-        <textarea id="work-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="work-status">Status</label>
-            <select id="work-status" name="status">{work_item_status_options}</select>
-          </div>
-          <div>
-            <label for="work-priority">Priority</label>
-            <select id="work-priority" name="priority">{work_item_priority_options}</select>
-          </div>
-          <div>
-            <label for="work-owner">Owner</label>
-            <input id="work-owner" name="owner" maxlength="120">
-          </div>
-          <div>
-            <label for="work-next-step">Next Step</label>
-            <input id="work-next-step" name="next_step">
-          </div>
-          <div>
-            <label for="work-source-type">Source Type</label>
-            <select id="work-source-type" name="source_type_id">{_source_type_options(source_types)}</select>
-          </div>
-          <div>
-            <label for="work-due-date">Due Date</label>
-            <input id="work-due-date" name="due_date" type="date">
-          </div>
-          <div>
-            <label for="work-link">Link</label>
-            <input id="work-link" name="link" maxlength="500">
-          </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <h2>Work Items</h2>
+      </div>
+      <details id="new-work-item" class="collapsible-panel"{new_work_item_open}>
+        <summary class="button">New Work Item</summary>
+        <div class="collapsible-body">
+          {error_html}
+          <form method="post" action="/programs/{program.id}/work-items/create">
+            <label for="work-title">Title</label>
+            <input id="work-title" name="title" required maxlength="200">
+            <label for="work-description">Description</label>
+            <textarea id="work-description" name="description"></textarea>
+            <div class="compact-fields">
+              <div>
+                <label for="work-status">Status</label>
+                <select id="work-status" name="status">{work_item_status_options}</select>
+              </div>
+              <div>
+                <label for="work-priority">Priority</label>
+                <select id="work-priority" name="priority">{work_item_priority_options}</select>
+              </div>
+              <div>
+                <label for="work-owner">Owner</label>
+                <input id="work-owner" name="owner" maxlength="120">
+              </div>
+              <div>
+                <label for="work-next-step">Next Step</label>
+                <input id="work-next-step" name="next_step">
+              </div>
+              <div>
+                <label for="work-source-type">Source Type</label>
+                <select id="work-source-type" name="source_type_id">{_source_type_options(source_types)}</select>
+              </div>
+              <div>
+                <label for="work-due-date">Due Date</label>
+                <input id="work-due-date" name="due_date" type="date">
+              </div>
+              <div>
+                <label for="work-link">Link</label>
+                <input id="work-link" name="link" maxlength="500">
+              </div>
+            </div>
+            <div class="actions">
+              <button type="submit">Create Work Item</button>
+            </div>
+          </form>
         </div>
-        <div class="actions">
-          <button type="submit">Create Work Item</button>
-        </div>
-      </form>
-    </section>
-    <section class="panel">
-      <h2>Work Items</h2>
+      </details>
+      {edit_panel}
       <form class="filters" method="get" action="/programs/{program.id}/view">
         <div>
           <label for="work_status_filter">Status</label>
@@ -744,7 +832,16 @@ async def create_work_item_from_ui(
     if source_type_id is not None and db.get(SourceType, source_type_id) is None:
         source_type_id = None
     if not title or work_status not in WORK_ITEM_STATUSES:
-        return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+        query = urlencode(
+            {
+                "show_new_work_item": "1",
+                "work_item_error": "Title and status are required.",
+            }
+        )
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-work-item",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
 
     work_item = WorkItem(
         program_id=program_id,
@@ -761,78 +858,6 @@ async def create_work_item_from_ui(
     db.add(work_item)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.get("/work-items/{work_item_id}/edit", response_class=HTMLResponse, include_in_schema=False)
-def edit_work_item_page(work_item_id: int, db: Session = Depends(get_db)) -> str:
-    work_item = db.scalars(
-        select(WorkItem)
-        .options(selectinload(WorkItem.source_type))
-        .where(WorkItem.id == work_item_id)
-    ).one_or_none()
-    if work_item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
-    source_types = list(db.scalars(select(SourceType).order_by(SourceType.name.asc())))
-    status_options = "".join(
-        _select_option(work_status, work_status.replace("_", " ").title(), work_item.status)
-        for work_status in WORK_ITEM_STATUSES
-    )
-    priority_options = "".join(
-        _select_option(priority, priority.title(), work_item.priority)
-        for priority in WORK_ITEM_PRIORITIES
-    )
-    body = f"""
-    <header>
-      <div>
-        <h1>Edit Work Item</h1>
-        <div class="muted">{escape(work_item.title)}</div>
-      </div>
-      <a href="/programs/{work_item.program_id}/view">Back to Program</a>
-    </header>
-    <section class="panel">
-      <form method="post" action="/work-items/{work_item.id}/update">
-        <label for="title">Title</label>
-        <input id="title" name="title" required maxlength="200" value="{escape(work_item.title)}">
-        <label for="description">Description</label>
-        <textarea id="description" name="description">{escape(work_item.description or "")}</textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="status">Status</label>
-            <select id="status" name="status">{status_options}</select>
-          </div>
-          <div>
-            <label for="priority">Priority</label>
-            <select id="priority" name="priority">{priority_options}</select>
-          </div>
-          <div>
-            <label for="owner">Owner</label>
-            <input id="owner" name="owner" maxlength="120" value="{escape(work_item.owner or "")}">
-          </div>
-          <div>
-            <label for="next_step">Next Step</label>
-            <input id="next_step" name="next_step" value="{escape(work_item.next_step or "")}">
-          </div>
-          <div>
-            <label for="source_type_id">Source Type</label>
-            <select id="source_type_id" name="source_type_id">{_source_type_options(source_types, work_item.source_type_id)}</select>
-          </div>
-          <div>
-            <label for="due_date">Due Date</label>
-            <input id="due_date" name="due_date" type="date" value="{escape(_format_date(work_item.due_date))}">
-          </div>
-          <div>
-            <label for="link">Link</label>
-            <input id="link" name="link" maxlength="500" value="{escape(work_item.link or "")}">
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">Save Work Item</button>
-          <a class="button secondary" href="/programs/{work_item.program_id}/view">Cancel</a>
-        </div>
-      </form>
-    </section>
-    """
-    return _page_shell("Edit Work Item", body)
 
 
 @router.post("/work-items/{work_item_id}/update", include_in_schema=False)
