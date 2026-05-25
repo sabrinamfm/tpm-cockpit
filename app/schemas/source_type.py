@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class SourceTypeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    slug: Optional[str] = Field(default=None, max_length=50)
 
 
 class SourceTypeUpdate(BaseModel):
@@ -16,6 +17,8 @@ class SourceTypeUpdate(BaseModel):
 class SourceTypeRead(BaseModel):
     id: int
     name: str
+    slug: str
+    sort_order: int
     is_active: bool
     created_at: datetime
     updated_at: datetime

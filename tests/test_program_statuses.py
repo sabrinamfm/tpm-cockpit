@@ -231,15 +231,21 @@ def test_create_status_from_settings_ui(client) -> None:
     assert "On Hold" in response.text
 
 
-def test_deactivate_status_from_settings_ui(client) -> None:
+def test_delete_unused_status_from_settings_ui(client) -> None:
+    new_status = client.post(
+        "/settings/program-statuses/create",
+        data={"name": "On Hold", "slug": "on-hold", "color": "#f59e0b"},
+        follow_redirects=False,
+    )
+    assert new_status.status_code == 303
     statuses = client.get("/program-statuses").json()
-    archived = next(s for s in statuses if s["slug"] == "archived")
+    created = next(s for s in statuses if s["slug"] == "on-hold")
 
     response = client.post(
-        f"/settings/program-statuses/{archived['id']}/deactivate",
+        f"/settings/program-statuses/{created['id']}/delete",
         follow_redirects=True,
     )
 
     assert response.status_code == 200
-    updated = client.get("/program-statuses").json()
-    assert next(s for s in updated if s["slug"] == "archived")["is_active"] is False
+    statuses_after = client.get("/program-statuses").json()
+    assert all(s["slug"] != "on-hold" for s in statuses_after)

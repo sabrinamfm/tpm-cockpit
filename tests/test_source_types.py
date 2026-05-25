@@ -27,22 +27,14 @@ def test_deactivate_and_reactivate_source_type(client) -> None:
     assert reactivate_response.json()["is_active"] is True
 
 
-def test_source_type_settings_page_can_toggle_activation(client) -> None:
-    client.post("/settings/source-types/create", data={"name": "Meeting"})
+def test_create_source_type_from_settings_ui(client) -> None:
+    response = client.post(
+        "/settings/source-types/create",
+        data={"name": "Meeting", "slug": "meeting"},
+        follow_redirects=False,
+    )
     created = client.get("/source-types").json()[0]
 
-    deactivate_response = client.post(
-        f"/settings/source-types/{created['id']}/deactivate",
-        follow_redirects=False,
-    )
-    deactivated = client.get("/source-types").json()[0]
-    reactivate_response = client.post(
-        f"/settings/source-types/{created['id']}/activate",
-        follow_redirects=False,
-    )
-    reactivated = client.get("/source-types").json()[0]
-
-    assert deactivate_response.status_code == 303
-    assert deactivated["is_active"] is False
-    assert reactivate_response.status_code == 303
-    assert reactivated["is_active"] is True
+    assert response.status_code == 303
+    assert created["name"] == "Meeting"
+    assert created["slug"] == "meeting"

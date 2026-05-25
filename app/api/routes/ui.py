@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
@@ -210,6 +210,8 @@ def _page_shell(title: str, body: str) -> str:
     .settings-nav {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }}
     .settings-nav a {{ display: inline-block; padding: 6px 14px; border-radius: 6px; background: #e7ebf1; color: #243043; font-size: 13px; font-weight: 600; text-decoration: none; }}
     .settings-nav a:hover {{ background: #d9dee7; }}
+    .drag-handle {{ cursor: grab; color: #9ca3af; user-select: none; font-size: 16px; padding: 0 4px; }}
+    .drag-handle:active {{ cursor: grabbing; }}
     .settings-section {{ margin-bottom: 40px; }}
     .settings-section-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }}
     .settings-section-header h2 {{ margin: 0; }}
@@ -1453,17 +1455,15 @@ def settings_page(
     status_rows = []
     for ps in all_statuses:
         is_editing = edit_status_id == ps.id
-        active_label = "Active" if ps.is_active else "Inactive"
-        toggle_action = "deactivate" if ps.is_active else "activate"
-        toggle_label = "Deactivate" if ps.is_active else "Reactivate"
-        default_badge = ' <span class="pill">Default</span>' if ps.is_default else ""
         color_swatch = f'<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{escape(ps.color)};vertical-align:middle;margin-right:6px"></span>'
+        default_badge = ' <span class="pill">Default</span>' if ps.is_default else ""
 
         if is_editing:
             status_rows.append(f"""
-            <tr>
-              <td colspan="6">
-                <form method="post" action="/settings/program-statuses/{ps.id}/update" style="display:grid;grid-template-columns:repeat(4,minmax(100px,1fr)) auto;gap:8px;align-items:end;padding:8px 0">
+            <tr data-id="{ps.id}">
+              <td></td>
+              <td colspan="5">
+                <form method="post" action="/settings/program-statuses/{ps.id}/update" style="display:flex;gap:8px;align-items:flex-end;padding:4px 0;flex-wrap:wrap">
                   <div>
                     <label for="edit_name_{ps.id}" style="margin:0 0 4px">Name</label>
                     <input id="edit_name_{ps.id}" name="name" value="{escape(ps.name)}" required maxlength="120">
@@ -1471,10 +1471,6 @@ def settings_page(
                   <div>
                     <label for="edit_color_{ps.id}" style="margin:0 0 4px">Color</label>
                     <input id="edit_color_{ps.id}" name="color" type="color" value="{escape(ps.color)}">
-                  </div>
-                  <div>
-                    <label for="edit_sort_{ps.id}" style="margin:0 0 4px">Sort order</label>
-                    <input id="edit_sort_{ps.id}" name="sort_order" type="number" min="0" value="{ps.sort_order}">
                   </div>
                   <div>
                     <label style="margin:0 0 4px">Default</label>
@@ -1492,17 +1488,17 @@ def settings_page(
             </tr>""")
         else:
             status_rows.append(f"""
-            <tr>
+            <tr draggable="true" data-id="{ps.id}">
+              <td class="drag-handle">⠿</td>
               <td>{color_swatch}{escape(ps.name)}{default_badge}</td>
               <td><code style="font-size:12px">{escape(ps.slug)}</code></td>
               <td>{escape(ps.color)}</td>
-              <td>{ps.sort_order}</td>
-              <td><span class="pill">{active_label}</span></td>
+              <td>{"✓" if ps.is_default else "—"}</td>
               <td>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <a class="button secondary" href="/settings?edit_status_id={ps.id}#program-statuses">Edit</a>
-                  <form method="post" action="/settings/program-statuses/{ps.id}/{toggle_action}" style="display:inline">
-                    <button class="secondary" type="submit">{toggle_label}</button>
+                  <form method="post" action="/settings/program-statuses/{ps.id}/delete" style="display:inline">
+                    <button class="secondary" type="submit">Delete</button>
                   </form>
                 </div>
               </td>
@@ -1511,18 +1507,18 @@ def settings_page(
     status_table_body = "".join(status_rows) or '<tr><td colspan="6" class="muted">No program statuses yet.</td></tr>'
 
     # ── Source Types section ──────────────────────────────────────────────────
-    source_types = list(db.scalars(select(SourceType).order_by(SourceType.name.asc())))
+    source_types = list(
+        db.scalars(select(SourceType).order_by(SourceType.sort_order.asc(), SourceType.id.asc()))
+    )
     source_rows = []
     for source_type in source_types:
-        action = "Deactivate" if source_type.is_active else "Reactivate"
-        action_path = "deactivate" if source_type.is_active else "activate"
-        status_label = "Active" if source_type.is_active else "Inactive"
         is_editing_st = edit_source_type_id == source_type.id
         if is_editing_st:
             source_rows.append(f"""
-            <tr>
-              <td colspan="4">
-                <form method="post" action="/settings/source-types/{source_type.id}/update" style="display:flex;gap:8px;align-items:flex-end;padding:8px 0;flex-wrap:wrap">
+            <tr data-id="{source_type.id}">
+              <td></td>
+              <td colspan="3">
+                <form method="post" action="/settings/source-types/{source_type.id}/update" style="display:flex;gap:8px;align-items:flex-end;padding:4px 0;flex-wrap:wrap">
                   <div>
                     <label for="edit_st_name_{source_type.id}" style="margin:0 0 4px">Name</label>
                     <input id="edit_st_name_{source_type.id}" name="name" value="{escape(source_type.name)}" required maxlength="120">
@@ -1536,16 +1532,13 @@ def settings_page(
             </tr>""")
         else:
             source_rows.append(f"""
-            <tr>
+            <tr draggable="true" data-id="{source_type.id}">
+              <td class="drag-handle">⠿</td>
               <td>{escape(source_type.name)}</td>
-              <td><span class="pill">{status_label}</span></td>
-              <td>{escape(_format_datetime(source_type.updated_at))}</td>
+              <td><code style="font-size:12px">{escape(source_type.slug)}</code></td>
               <td>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <a class="button secondary" href="/settings?edit_source_type_id={source_type.id}#source-types">Edit</a>
-                  <form method="post" action="/settings/source-types/{source_type.id}/{action_path}" style="display:inline">
-                    <button class="secondary" type="submit">{action}</button>
-                  </form>
                   <form method="post" action="/settings/source-types/{source_type.id}/delete" style="display:inline">
                     <button class="secondary" type="submit">Delete</button>
                   </form>
@@ -1582,8 +1575,6 @@ def settings_page(
               <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
               <label for="ps_color">Color</label>
               <input id="ps_color" name="color" type="color" value="#6b7280">
-              <label for="ps_sort">Sort order</label>
-              <input id="ps_sort" name="sort_order" type="number" min="0" value="0">
               <div class="actions">
                 <button type="submit">Create Status</button>
               </div>
@@ -1591,10 +1582,10 @@ def settings_page(
           </div>
         </details>
       </div>
-      <table>
+      <table id="tbl-program-statuses">
         <thead>
           <tr>
-            <th>Name</th><th>Slug</th><th>Color</th><th>Order</th><th>State</th><th>Actions</th>
+            <th></th><th>Name</th><th>Slug</th><th>Color</th><th>Default</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>{status_table_body}</tbody>
@@ -1610,6 +1601,8 @@ def settings_page(
             <form method="post" action="/settings/source-types/create">
               <label for="st_name">Name</label>
               <input id="st_name" name="name" required maxlength="120">
+              <label for="st_slug">Slug</label>
+              <input id="st_slug" name="slug" maxlength="50" placeholder="e.g. email-thread">
               <div class="actions">
                 <button type="submit">Create Source Type</button>
               </div>
@@ -1617,15 +1610,49 @@ def settings_page(
           </div>
         </details>
       </div>
-      <table>
+      <table id="tbl-source-types">
         <thead>
           <tr>
-            <th>Name</th><th>State</th><th>Updated</th><th>Actions</th>
+            <th></th><th>Name</th><th>Slug</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>{source_table_body}</tbody>
       </table>
     </div>
+    <script>
+    (function() {{
+      function initDragSort(tableId, reorderUrl) {{
+        var tbody = document.querySelector('#' + tableId + ' tbody');
+        if (!tbody) return;
+        var dragging = null;
+        tbody.addEventListener('dragstart', function(e) {{
+          dragging = e.target.closest('tr[data-id]');
+          if (dragging) setTimeout(function() {{ dragging.style.opacity = '0.4'; }}, 0);
+        }});
+        tbody.addEventListener('dragend', function() {{
+          if (dragging) dragging.style.opacity = '';
+          dragging = null;
+        }});
+        tbody.addEventListener('dragover', function(e) {{
+          e.preventDefault();
+          if (!dragging) return;
+          var row = e.target.closest('tr[data-id]');
+          if (row && row !== dragging) {{
+            var mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+            if (e.clientY < mid) tbody.insertBefore(dragging, row);
+            else tbody.insertBefore(dragging, row.nextSibling);
+          }}
+        }});
+        tbody.addEventListener('drop', function(e) {{
+          e.preventDefault();
+          var ids = [].slice.call(tbody.querySelectorAll('tr[data-id]')).map(function(r) {{ return +r.dataset.id; }});
+          fetch(reorderUrl, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{ids:ids}})}});
+        }});
+      }}
+      initDragSort('tbl-program-statuses', '/settings/program-statuses/reorder');
+      initDragSort('tbl-source-types', '/settings/source-types/reorder');
+    }})();
+    </script>
     """
     return _page_shell("Settings", body)
 
@@ -1646,32 +1673,29 @@ def redirect_program_statuses_settings() -> RedirectResponse:
 
 @router.post("/settings/source-types/create", include_in_schema=False)
 async def create_source_type_from_ui(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+    import re as _re
     parsed = await _parse_form(request)
     name = parsed.get("name", "").strip()
-    if name:
-        db.add(SourceType(name=name))
-        db.commit()
+    slug_raw = parsed.get("slug", "").strip()
+    slug = _re.sub(r"[^a-z0-9]+", "-", (slug_raw or name).lower()).strip("-")
+    if name and slug:
+        existing = db.scalar(select(SourceType).where(SourceType.slug == slug))
+        if existing is None:
+            max_order = db.scalar(select(func.max(SourceType.sort_order))) or -1
+            db.add(SourceType(name=name, slug=slug, sort_order=max_order + 1))
+            db.commit()
     return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.post("/settings/source-types/{source_type_id}/deactivate", include_in_schema=False)
-def deactivate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
-    source_type = db.get(SourceType, source_type_id)
-    if source_type is not None:
-        source_type.is_active = False
-        db.add(source_type)
-        db.commit()
-    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post("/settings/source-types/{source_type_id}/activate", include_in_schema=False)
-def activate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
-    source_type = db.get(SourceType, source_type_id)
-    if source_type is not None:
-        source_type.is_active = True
-        db.add(source_type)
-        db.commit()
-    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
+@router.post("/settings/source-types/reorder", include_in_schema=False)
+async def reorder_source_types(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    for i, st_id in enumerate(data.get("ids", [])):
+        st = db.get(SourceType, int(st_id))
+        if st:
+            st.sort_order = i
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/settings/source-types/{source_type_id}/update", include_in_schema=False)
@@ -1706,14 +1730,24 @@ async def create_program_status_from_ui(
     name = parsed.get("name", "").strip()
     slug = parsed.get("slug", "").strip().lower().replace(" ", "-")
     color = parsed.get("color", "#6b7280").strip() or "#6b7280"
-    sort_order_raw = parsed.get("sort_order", "0").strip()
-    sort_order = int(sort_order_raw) if sort_order_raw.isdigit() else 0
     if name and slug:
         existing = db.scalar(select(ProgramStatus).where(ProgramStatus.slug == slug))
         if existing is None:
-            db.add(ProgramStatus(name=name, slug=slug, color=color, sort_order=sort_order))
+            max_order = db.scalar(select(func.max(ProgramStatus.sort_order))) or -1
+            db.add(ProgramStatus(name=name, slug=slug, color=color, sort_order=max_order + 1))
             db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/program-statuses/reorder", include_in_schema=False)
+async def reorder_program_statuses(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    for i, ps_id in enumerate(data.get("ids", [])):
+        ps = db.get(ProgramStatus, int(ps_id))
+        if ps:
+            ps.sort_order = i
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/settings/program-statuses/{status_id}/update", include_in_schema=False)
@@ -1725,38 +1759,22 @@ async def update_program_status_from_ui(
         parsed = await _parse_form(request)
         name = parsed.get("name", "").strip()
         color = parsed.get("color", "").strip() or ps.color
-        sort_order_raw = parsed.get("sort_order", str(ps.sort_order)).strip()
-        sort_order = int(sort_order_raw) if sort_order_raw.isdigit() else ps.sort_order
         is_default = parsed.get("is_default", "0") == "1"
         if name:
             ps.name = name
             ps.color = color
-            ps.sort_order = sort_order
             ps.is_default = is_default
             db.add(ps)
             db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.post("/settings/program-statuses/{status_id}/deactivate", include_in_schema=False)
-def deactivate_program_status_from_ui(
-    status_id: int, db: Session = Depends(get_db)
-) -> RedirectResponse:
+@router.post("/settings/program-statuses/{status_id}/delete", include_in_schema=False)
+def delete_program_status_from_ui(status_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
     ps = db.get(ProgramStatus, status_id)
     if ps is not None:
-        ps.is_active = False
-        db.add(ps)
-        db.commit()
-    return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post("/settings/program-statuses/{status_id}/activate", include_in_schema=False)
-def activate_program_status_from_ui(
-    status_id: int, db: Session = Depends(get_db)
-) -> RedirectResponse:
-    ps = db.get(ProgramStatus, status_id)
-    if ps is not None:
-        ps.is_active = True
-        db.add(ps)
-        db.commit()
+        in_use = (db.scalar(select(func.count(Program.id)).where(Program.status_id == status_id)) or 0) > 0
+        if not in_use:
+            db.delete(ps)
+            db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
