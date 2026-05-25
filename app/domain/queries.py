@@ -1,0 +1,129 @@
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.dependency import Dependency
+from app.models.program import Program
+from app.models.work_item import WorkItem
+
+_TERMINAL_WORK = ("completed", "cancelled")
+_TERMINAL_DEP = ("resolved", "cancelled")
+
+
+def get_blocked_work_items(db: Session) -> list[WorkItem]:
+    return list(
+        db.scalars(
+            select(WorkItem)
+            .options(selectinload(WorkItem.program))
+            .where(WorkItem.status == "blocked")
+            .order_by(WorkItem.updated_at.asc())
+        )
+    )
+
+
+def get_overdue_work_items(db: Session, today: Optional[date] = None) -> list[WorkItem]:
+    cutoff = today or date.today()
+    return list(
+        db.scalars(
+            select(WorkItem)
+            .options(selectinload(WorkItem.program))
+            .where(
+                WorkItem.due_date.is_not(None),
+                WorkItem.due_date < cutoff,
+                WorkItem.status.not_in(_TERMINAL_WORK),
+            )
+            .order_by(WorkItem.due_date.asc())
+        )
+    )
+
+
+def get_stale_work_items(db: Session, now: Optional[datetime] = None) -> list[WorkItem]:
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=7)
+    return list(
+        db.scalars(
+            select(WorkItem)
+            .options(selectinload(WorkItem.program))
+            .where(
+                WorkItem.updated_at < cutoff,
+                WorkItem.status.not_in(_TERMINAL_WORK),
+            )
+            .order_by(WorkItem.updated_at.asc())
+        )
+    )
+
+
+def get_critical_dependencies(db: Session) -> list[Dependency]:
+    return list(
+        db.scalars(
+            select(Dependency)
+            .options(selectinload(Dependency.program))
+            .where(
+                Dependency.blocking_level == "critical",
+                Dependency.status.not_in(_TERMINAL_DEP),
+            )
+            .order_by(Dependency.updated_at.desc())
+        )
+    )
+
+
+def get_stale_dependencies(db: Session, now: Optional[datetime] = None) -> list[Dependency]:
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=14)
+    return list(
+        db.scalars(
+            select(Dependency)
+            .options(selectinload(Dependency.program))
+            .where(
+                Dependency.last_confirmation_at.is_not(None),
+                Dependency.last_confirmation_at < cutoff,
+                Dependency.status.not_in(_TERMINAL_DEP),
+            )
+            .order_by(Dependency.last_confirmation_at.asc())
+        )
+    )
+
+
+def get_programs_needing_attention(
+    db: Session,
+    today: Optional[date] = None,
+    now: Optional[datetime] = None,
+) -> list[Program]:
+    today = today or date.today()
+    stale_cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=14)
+
+    blocked_prog_ids = select(WorkItem.program_id).where(WorkItem.status == "blocked")
+    overdue_prog_ids = select(WorkItem.program_id).where(
+        WorkItem.due_date.is_not(None),
+        WorkItem.due_date < today,
+        WorkItem.status.not_in(_TERMINAL_WORK),
+    )
+    stale_dep_prog_ids = select(Dependency.program_id).where(
+        Dependency.last_confirmation_at.is_not(None),
+        Dependency.last_confirmation_at < stale_cutoff,
+        Dependency.status.not_in(_TERMINAL_DEP),
+    )
+
+    return list(
+        db.scalars(
+            select(Program)
+            .where(
+                or_(
+                    Program.id.in_(blocked_prog_ids),
+                    Program.id.in_(overdue_prog_ids),
+                    Program.id.in_(stale_dep_prog_ids),
+                )
+            )
+            .order_by(Program.updated_at.desc())
+        )
+    )
+
+
+def get_recently_updated_programs(db: Session, limit: int = 10) -> list[Program]:
+    return list(
+        db.scalars(
+            select(Program)
+            .order_by(Program.updated_at.desc())
+            .limit(limit)
+        )
+    )

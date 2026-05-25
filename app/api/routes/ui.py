@@ -12,6 +12,15 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.session import get_db
 from app.domain.dependencies import dependency_is_stale
 from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
+from app.domain.queries import (
+    get_blocked_work_items,
+    get_critical_dependencies,
+    get_overdue_work_items,
+    get_programs_needing_attention,
+    get_recently_updated_programs,
+    get_stale_dependencies,
+    get_stale_work_items,
+)
 from app.models import Dependency, Program, ProgramStatus, SourceType, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
@@ -840,3 +849,23 @@ def delete_program_status_from_ui(status_id: int, db: Session = Depends(get_db))
     db.delete(ps)
     db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Morning View ──────────────────────────────────────────────────────────────
+
+@router.get("/morning", response_class=HTMLResponse, include_in_schema=False)
+def morning_view(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "morning.html",
+        {
+            "today": date.today(),
+            "programs_needing_attention": get_programs_needing_attention(db),
+            "blocked_work_items": get_blocked_work_items(db),
+            "overdue_work_items": get_overdue_work_items(db),
+            "stale_work_items": get_stale_work_items(db),
+            "critical_dependencies": get_critical_dependencies(db),
+            "stale_dependencies": get_stale_dependencies(db),
+            "recently_updated_programs": get_recently_updated_programs(db),
+        },
+    )

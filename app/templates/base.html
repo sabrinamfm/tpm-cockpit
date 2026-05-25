@@ -104,6 +104,13 @@
     details.create-panel > summary { list-style: none; cursor: pointer; }
     details.create-panel > summary::-webkit-details-marker { display: none; }
     details.create-panel > .panel { margin-top: 10px; }
+    .site-nav { display: flex; gap: 4px; padding: 8px 20px; background: #ffffff; border-bottom: 1px solid #e2e7ef; }
+    .site-nav a { padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #526071; text-decoration: none; }
+    .site-nav a:hover { background: #f2f5f9; color: #18212f; }
+    .morning-section { margin-bottom: 36px; }
+    .morning-section h2 { margin-bottom: 10px; }
+    .section-count { font-size: 13px; font-weight: 400; color: #667085; margin-left: 6px; }
+    .empty-state { margin: 6px 0 0; font-size: 14px; }
     .compact-fields { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 8px; }
     .collapsible-panel {
       margin-bottom: 16px;
@@ -128,6 +135,11 @@
   </style>
 </head>
 <body>
+  <nav class="site-nav">
+    <a href="/">Programs</a>
+    <a href="/morning">Morning View</a>
+    <a href="/settings">Settings</a>
+  </nav>
   <main>
     {% block content %}{% endblock %}
   </main>

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Morning View{% endblock %}
+{% block content %}
+<header>
+  <div>
+    <h1>Morning View</h1>
+    <div class="muted">{{ today }}</div>
+  </div>
+</header>
+
+<section class="morning-section">
+  <h2>Programs Needing Attention <span class="section-count">({{ programs_needing_attention|length }})</span></h2>
+  {% if programs_needing_attention %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for program in programs_needing_attention %}
+      <tr class="attention-row">
+        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>
+          <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
+            {{ program.program_status.name }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Blocked Work Items <span class="section-count">({{ blocked_work_items|length }})</span></h2>
+  {% if blocked_work_items %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for item in blocked_work_items %}
+      <tr class="blocked-row">
+        <td><a href="/programs/{{ item.program_id }}/view">{{ item.program.name }}</a></td>
+        <td>{{ item.title }}</td>
+        <td class="muted">{{ item.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Overdue Work Items <span class="section-count">({{ overdue_work_items|length }})</span></h2>
+  {% if overdue_work_items %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Due Date</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for item in overdue_work_items %}
+      <tr class="overdue-row">
+        <td><a href="/programs/{{ item.program_id }}/view">{{ item.program.name }}</a></td>
+        <td>{{ item.title }}</td>
+        <td>{{ item.due_date | format_date }}</td>
+        <td class="muted">{{ item.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Stale Work Items <span class="section-count">({{ stale_work_items|length }})</span></h2>
+  {% if stale_work_items %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Last Updated</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for item in stale_work_items %}
+      <tr class="stale-row">
+        <td><a href="/programs/{{ item.program_id }}/view">{{ item.program.name }}</a></td>
+        <td>{{ item.title }}</td>
+        <td class="muted">{{ item.updated_at | format_datetime }}</td>
+        <td class="muted">{{ item.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Critical Dependencies <span class="section-count">({{ critical_dependencies|length }})</span></h2>
+  {% if critical_dependencies %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Type</th><th>Status</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for dep in critical_dependencies %}
+      <tr class="critical-row">
+        <td><a href="/programs/{{ dep.program_id }}/view">{{ dep.program.name }}</a></td>
+        <td>{{ dep.title }}</td>
+        <td class="muted">{{ dep.dependency_type }}</td>
+        <td>{{ dep.status }}</td>
+        <td class="muted">{{ dep.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Stale Dependencies <span class="section-count">({{ stale_dependencies|length }})</span></h2>
+  {% if stale_dependencies %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Title</th><th>Last Confirmed</th><th>Owner</th></tr>
+    </thead>
+    <tbody>
+      {% for dep in stale_dependencies %}
+      <tr class="stale-row">
+        <td><a href="/programs/{{ dep.program_id }}/view">{{ dep.program.name }}</a></td>
+        <td>{{ dep.title }}</td>
+        <td class="muted">{{ dep.last_confirmation_at | format_datetime }}</td>
+        <td class="muted">{{ dep.owner or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Recently Updated Programs</h2>
+  {% if recently_updated_programs %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Status</th><th>Updated</th></tr>
+    </thead>
+    <tbody>
+      {% for program in recently_updated_programs %}
+      <tr>
+        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>
+          <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
+            {{ program.program_status.name }}
+          </span>
+        </td>
+        <td class="muted">{{ program.updated_at | format_datetime }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+{% endblock %}
