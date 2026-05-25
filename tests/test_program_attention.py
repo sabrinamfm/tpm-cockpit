@@ -1,18 +1,18 @@
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
+from app.domain.attention import work_item_is_overdue, work_item_is_stale
+from app.domain.programs import program_attention_state
 
 
 def test_program_needs_attention_when_any_work_item_is_blocked() -> None:
     now = datetime(2026, 5, 25, tzinfo=timezone.utc)
     program = SimpleNamespace(
-        status="active",
-        updated_at=now,
         work_items=[
             SimpleNamespace(status="open", due_date=None),
             SimpleNamespace(status="blocked", due_date=None),
         ],
+        dependencies=[],
     )
 
     assert program_attention_state(program, now=now) == "Needs attention"
@@ -21,24 +21,36 @@ def test_program_needs_attention_when_any_work_item_is_blocked() -> None:
 def test_program_needs_attention_when_any_open_work_item_is_overdue() -> None:
     now = datetime(2026, 5, 25, tzinfo=timezone.utc)
     program = SimpleNamespace(
-        status="active",
-        updated_at=now,
         work_items=[
             SimpleNamespace(status="open", due_date=date(2026, 5, 20)),
+        ],
+        dependencies=[],
+    )
+
+    assert program_attention_state(program, now=now) == "Needs attention"
+
+
+def test_program_needs_attention_when_dependency_is_stale() -> None:
+    now = datetime(2026, 5, 25, tzinfo=timezone.utc)
+    program = SimpleNamespace(
+        work_items=[],
+        dependencies=[
+            SimpleNamespace(status="open", last_confirmation_at=now - timedelta(days=15)),
         ],
     )
 
     assert program_attention_state(program, now=now) == "Needs attention"
 
 
-def test_program_attention_state_is_ok_without_blocked_or_overdue_work() -> None:
+def test_program_attention_state_is_ok_without_blocked_overdue_or_stale_dep() -> None:
     now = datetime(2026, 5, 25, tzinfo=timezone.utc)
     program = SimpleNamespace(
-        status="active",
-        updated_at=now - timedelta(days=30),
         work_items=[
             SimpleNamespace(status="open", due_date=date(2026, 5, 30)),
             SimpleNamespace(status="completed", due_date=date(2026, 5, 20)),
+        ],
+        dependencies=[
+            SimpleNamespace(status="open", last_confirmation_at=now - timedelta(days=3)),
         ],
     )
 

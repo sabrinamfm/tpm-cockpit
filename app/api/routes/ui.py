@@ -10,8 +10,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.domain.dependencies import dependency_is_stale
-from app.domain.programs import program_attention_state, work_item_is_overdue, work_item_is_stale
+from app.domain.attention import dependency_is_stale, work_item_is_overdue, work_item_is_stale
+from app.domain.programs import program_attention_state
 from app.domain.queries import (
     get_blocked_dependencies,
     get_blocked_work_items,
@@ -131,7 +131,10 @@ def program_ui(
     if sort not in PROGRAM_SORTS and sort != "status":
         sort = "updated_at"
 
-    statement = select(Program).options(selectinload(Program.work_items))
+    statement = select(Program).options(
+        selectinload(Program.work_items),
+        selectinload(Program.dependencies),
+    )
     if status_filter:
         statement = statement.join(Program.program_status).where(ProgramStatus.slug == status_filter)
     if sort == "status":

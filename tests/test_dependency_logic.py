@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.domain.dependencies import dependency_is_stale
+from app.domain.attention import dependency_is_stale
 
 
 def test_dependency_is_stale_when_confirmation_is_older_than_fourteen_days() -> None:

@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.domain.attention import DEPENDENCY_STALE_DAYS, WORK_ITEM_STALE_DAYS
 from app.models.dependency import Dependency
 from app.models.program import Program
 from app.models.work_item import WorkItem
@@ -40,7 +41,7 @@ def get_overdue_work_items(db: Session, today: Optional[date] = None) -> list[Wo
 
 
 def get_stale_work_items(db: Session, now: Optional[datetime] = None) -> list[WorkItem]:
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=7)
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=WORK_ITEM_STALE_DAYS)
     return list(
         db.scalars(
             select(WorkItem)
@@ -80,7 +81,7 @@ def get_critical_dependencies(db: Session) -> list[Dependency]:
 
 
 def get_stale_dependencies(db: Session, now: Optional[datetime] = None) -> list[Dependency]:
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=14)
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=DEPENDENCY_STALE_DAYS)
     return list(
         db.scalars(
             select(Dependency)
@@ -101,7 +102,7 @@ def get_programs_needing_attention(
     now: Optional[datetime] = None,
 ) -> list[Program]:
     today = today or date.today()
-    stale_cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=14)
+    stale_cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=DEPENDENCY_STALE_DAYS)
 
     blocked_prog_ids = select(WorkItem.program_id).where(WorkItem.status == "blocked")
     overdue_prog_ids = select(WorkItem.program_id).where(
