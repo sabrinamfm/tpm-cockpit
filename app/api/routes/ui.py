@@ -1441,6 +1441,7 @@ def delete_dependency_from_ui(dependency_id: int, db: Session = Depends(get_db))
 @router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
 def settings_page(
     edit_status_id: Optional[int] = None,
+    edit_source_type_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ) -> str:
     seed_default_program_statuses(db)
@@ -1469,7 +1470,7 @@ def settings_page(
                   </div>
                   <div>
                     <label for="edit_color_{ps.id}" style="margin:0 0 4px">Color</label>
-                    <input id="edit_color_{ps.id}" name="color" value="{escape(ps.color)}" maxlength="20">
+                    <input id="edit_color_{ps.id}" name="color" type="color" value="{escape(ps.color)}">
                   </div>
                   <div>
                     <label for="edit_sort_{ps.id}" style="margin:0 0 4px">Sort order</label>
@@ -1516,15 +1517,39 @@ def settings_page(
         action = "Deactivate" if source_type.is_active else "Reactivate"
         action_path = "deactivate" if source_type.is_active else "activate"
         status_label = "Active" if source_type.is_active else "Inactive"
-        source_rows.append(f"""
+        is_editing_st = edit_source_type_id == source_type.id
+        if is_editing_st:
+            source_rows.append(f"""
+            <tr>
+              <td colspan="4">
+                <form method="post" action="/settings/source-types/{source_type.id}/update" style="display:flex;gap:8px;align-items:flex-end;padding:8px 0;flex-wrap:wrap">
+                  <div>
+                    <label for="edit_st_name_{source_type.id}" style="margin:0 0 4px">Name</label>
+                    <input id="edit_st_name_{source_type.id}" name="name" value="{escape(source_type.name)}" required maxlength="120">
+                  </div>
+                  <div class="actions" style="margin:0">
+                    <button type="submit">Save</button>
+                    <a class="button secondary" href="/settings#source-types">Cancel</a>
+                  </div>
+                </form>
+              </td>
+            </tr>""")
+        else:
+            source_rows.append(f"""
             <tr>
               <td>{escape(source_type.name)}</td>
               <td><span class="pill">{status_label}</span></td>
               <td>{escape(_format_datetime(source_type.updated_at))}</td>
               <td>
-                <form method="post" action="/settings/source-types/{source_type.id}/{action_path}">
-                  <button class="secondary" type="submit">{action}</button>
-                </form>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <a class="button secondary" href="/settings?edit_source_type_id={source_type.id}#source-types">Edit</a>
+                  <form method="post" action="/settings/source-types/{source_type.id}/{action_path}" style="display:inline">
+                    <button class="secondary" type="submit">{action}</button>
+                  </form>
+                  <form method="post" action="/settings/source-types/{source_type.id}/delete" style="display:inline">
+                    <button class="secondary" type="submit">Delete</button>
+                  </form>
+                </div>
               </td>
             </tr>""")
 
@@ -1556,7 +1581,7 @@ def settings_page(
               <label for="ps_slug">Slug</label>
               <input id="ps_slug" name="slug" required maxlength="50" placeholder="e.g. on-hold">
               <label for="ps_color">Color</label>
-              <input id="ps_color" name="color" maxlength="20" value="#6b7280" placeholder="#6b7280">
+              <input id="ps_color" name="color" type="color" value="#6b7280">
               <label for="ps_sort">Sort order</label>
               <input id="ps_sort" name="sort_order" type="number" min="0" value="0">
               <div class="actions">
@@ -1645,6 +1670,30 @@ def activate_source_type_from_ui(source_type_id: int, db: Session = Depends(get_
     if source_type is not None:
         source_type.is_active = True
         db.add(source_type)
+        db.commit()
+    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/source-types/{source_type_id}/update", include_in_schema=False)
+async def update_source_type_from_ui(
+    source_type_id: int, request: Request, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    source_type = db.get(SourceType, source_type_id)
+    if source_type is not None:
+        parsed = await _parse_form(request)
+        name = parsed.get("name", "").strip()
+        if name:
+            source_type.name = name
+            db.add(source_type)
+            db.commit()
+    return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/source-types/{source_type_id}/delete", include_in_schema=False)
+def delete_source_type_from_ui(source_type_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    source_type = db.get(SourceType, source_type_id)
+    if source_type is not None:
+        db.delete(source_type)
         db.commit()
     return RedirectResponse("/settings#source-types", status_code=status.HTTP_303_SEE_OTHER)
 
