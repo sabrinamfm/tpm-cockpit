@@ -30,15 +30,18 @@ class ProgramStatus(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    programs: Mapped[list["Program"]] = relationship("Program", back_populates="program_status")
+    programs: Mapped[list["Program"]] = relationship(
+        "Program", back_populates="program_status", passive_deletes=True
+    )
 
 
 def seed_default_program_statuses(db) -> None:
-    """Insert default statuses if they don't exist yet. Safe to call multiple times."""
-    from sqlalchemy import select
+    """Insert defaults once, on first run only (when the table is empty)."""
+    from sqlalchemy import func, select
 
-    existing_slugs = {row.slug for row in db.scalars(select(ProgramStatus))}
+    count = db.scalar(select(func.count(ProgramStatus.id))) or 0
+    if count > 0:
+        return
     for data in DEFAULT_PROGRAM_STATUSES:
-        if data["slug"] not in existing_slugs:
-            db.add(ProgramStatus(**data))
+        db.add(ProgramStatus(**data))
     db.commit()

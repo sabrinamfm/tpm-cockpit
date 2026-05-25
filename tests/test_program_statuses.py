@@ -231,13 +231,11 @@ def test_create_status_from_settings_ui(client) -> None:
     assert "On Hold" in response.text
 
 
-def test_delete_unused_status_from_settings_ui(client) -> None:
-    new_status = client.post(
+def test_delete_status_from_settings_ui(client) -> None:
+    client.post(
         "/settings/program-statuses/create",
         data={"name": "On Hold", "slug": "on-hold", "color": "#f59e0b"},
-        follow_redirects=False,
     )
-    assert new_status.status_code == 303
     statuses = client.get("/program-statuses").json()
     created = next(s for s in statuses if s["slug"] == "on-hold")
 
@@ -249,3 +247,42 @@ def test_delete_unused_status_from_settings_ui(client) -> None:
     assert response.status_code == 200
     statuses_after = client.get("/program-statuses").json()
     assert all(s["slug"] != "on-hold" for s in statuses_after)
+
+
+def test_delete_used_status_reassigns_programs(client) -> None:
+    program = client.post("/programs", json={"name": "My Program", "status": "paused"}).json()
+    statuses = client.get("/program-statuses").json()
+    paused = next(s for s in statuses if s["slug"] == "paused")
+
+    client.post(f"/settings/program-statuses/{paused['id']}/delete")
+
+    updated = client.get(f"/programs/{program['id']}").json()
+    statuses_after = client.get("/program-statuses").json()
+    assert all(s["slug"] != "paused" for s in statuses_after)
+    assert updated["status"] != "paused"  # reassigned to replacement
+
+
+def test_delete_default_status_promotes_next(client) -> None:
+    statuses = client.get("/program-statuses").json()
+    default = next(s for s in statuses if s["is_default"])
+
+    client.post(f"/settings/program-statuses/{default['id']}/delete")
+
+    statuses_after = client.get("/program-statuses").json()
+    assert sum(1 for s in statuses_after if s["is_default"]) == 1
+
+
+def test_update_default_clears_other_defaults(client) -> None:
+    statuses = client.get("/program-statuses").json()
+    paused = next(s for s in statuses if s["slug"] == "paused")
+
+    client.patch(f"/settings/program-statuses/{paused['id']}/update", json={"is_default": True})
+    # Use UI update via form POST
+    client.post(
+        f"/settings/program-statuses/{paused['id']}/update",
+        data={"name": paused["name"], "slug": paused["slug"], "color": paused["color"], "is_default": "1"},
+    )
+
+    statuses_after = client.get("/program-statuses").json()
+    assert sum(1 for s in statuses_after if s["is_default"]) == 1
+    assert next(s for s in statuses_after if s["slug"] == "paused")["is_default"] is True

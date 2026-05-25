@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
@@ -1469,6 +1469,10 @@ def settings_page(
                     <input id="edit_name_{ps.id}" name="name" value="{escape(ps.name)}" required maxlength="120">
                   </div>
                   <div>
+                    <label for="edit_slug_{ps.id}" style="margin:0 0 4px">Slug</label>
+                    <input id="edit_slug_{ps.id}" name="slug" value="{escape(ps.slug)}" required maxlength="50">
+                  </div>
+                  <div>
                     <label for="edit_color_{ps.id}" style="margin:0 0 4px">Color</label>
                     <input id="edit_color_{ps.id}" name="color" type="color" value="{escape(ps.color)}">
                   </div>
@@ -1758,9 +1762,21 @@ async def update_program_status_from_ui(
     if ps is not None:
         parsed = await _parse_form(request)
         name = parsed.get("name", "").strip()
+        slug = parsed.get("slug", "").strip().lower().replace(" ", "-") or ps.slug
         color = parsed.get("color", "").strip() or ps.color
         is_default = parsed.get("is_default", "0") == "1"
         if name:
+            # Reject slug change if it conflicts with another status
+            slug_conflict = db.scalar(
+                select(ProgramStatus).where(ProgramStatus.slug == slug, ProgramStatus.id != status_id)
+            )
+            if slug_conflict is None:
+                ps.slug = slug
+            if is_default:
+                # Ensure exactly one default
+                db.execute(
+                    update(ProgramStatus).where(ProgramStatus.id != status_id).values(is_default=False)
+                )
             ps.name = name
             ps.color = color
             ps.is_default = is_default
@@ -1772,9 +1788,27 @@ async def update_program_status_from_ui(
 @router.post("/settings/program-statuses/{status_id}/delete", include_in_schema=False)
 def delete_program_status_from_ui(status_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
     ps = db.get(ProgramStatus, status_id)
-    if ps is not None:
-        in_use = (db.scalar(select(func.count(Program.id)).where(Program.status_id == status_id)) or 0) > 0
-        if not in_use:
-            db.delete(ps)
-            db.commit()
+    if ps is None:
+        return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+    replacement = db.scalar(
+        select(ProgramStatus)
+        .where(ProgramStatus.id != status_id)
+        .order_by(ProgramStatus.sort_order.asc(), ProgramStatus.id.asc())
+    )
+    if replacement is None:
+        # Can't delete the last status — programs would have no valid status
+        return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
+
+    if ps.is_default:
+        replacement.is_default = True
+
+    # Reassign programs via ORM so the session stays consistent
+    for prog in list(db.scalars(select(Program).where(Program.status_id == status_id))):
+        prog.status_id = replacement.id
+
+    # Flush reassignments before issuing the DELETE so the FK is clear
+    db.flush()
+    db.delete(ps)
+    db.commit()
     return RedirectResponse("/settings#program-statuses", status_code=status.HTTP_303_SEE_OTHER)
