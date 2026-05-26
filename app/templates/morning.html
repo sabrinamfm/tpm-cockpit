@@ -9,11 +9,63 @@
 </header>
 
 <section class="morning-section">
+  <h2>Programs Off Track <span class="section-count">({{ programs_off_track|length }})</span></h2>
+  {% if programs_off_track %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Status</th><th>Evidence</th></tr>
+    </thead>
+    <tbody>
+      {% for program in programs_off_track %}
+      <tr class="critical-row">
+        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>
+          <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
+            {{ program.program_status.name }}
+          </span>
+        </td>
+        <td class="muted">{{ program_health_evidence(program) | join(" · ") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
+  <h2>Programs At Risk <span class="section-count">({{ programs_at_risk|length }})</span></h2>
+  {% if programs_at_risk %}
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Status</th><th>Evidence</th></tr>
+    </thead>
+    <tbody>
+      {% for program in programs_at_risk %}
+      <tr class="overdue-row">
+        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>
+          <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
+            {{ program.program_status.name }}
+          </span>
+        </td>
+        <td class="muted">{{ program_health_evidence(program) | join(" · ") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">None</p>
+  {% endif %}
+</section>
+
+<section class="morning-section">
   <h2>Programs Needing Attention <span class="section-count">({{ programs_needing_attention|length }})</span></h2>
   {% if programs_needing_attention %}
   <table>
     <thead>
-      <tr><th>Program</th><th>Status</th></tr>
+      <tr><th>Program</th><th>Status</th><th>Evidence</th></tr>
     </thead>
     <tbody>
       {% for program in programs_needing_attention %}
@@ -24,6 +76,7 @@
             {{ program.program_status.name }}
           </span>
         </td>
+        <td class="muted">{{ program_health_evidence(program) | join(" · ") }}</td>
       </tr>
       {% endfor %}
     </tbody>

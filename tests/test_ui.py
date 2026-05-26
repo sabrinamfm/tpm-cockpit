@@ -32,9 +32,9 @@ def test_program_ui_loads(client) -> None:
     assert response.status_code == 200
     assert "TPM Cockpit" in response.text
     assert "Program List" in response.text
-    assert "Attention" in response.text
+    assert "Health" in response.text
     assert "All statuses" in response.text
-    assert "All attention states" in response.text
+    assert "All health states" in response.text
     assert "Actions" in response.text
 
 
@@ -142,7 +142,7 @@ def test_program_list_shows_attention_from_blocked_work_item(client) -> None:
 
     assert response.status_code == 200
     assert "Needs Follow Up" in response.text
-    assert "Needs attention" in response.text
+    assert "Needs Attention" in response.text
 
 
 def test_work_item_ui_filters_by_owner_and_source_type(client) -> None:

@@ -11,14 +11,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.domain.attention import dependency_is_stale, risk_is_critical, risk_is_stale, work_item_is_overdue, work_item_is_stale
-from app.domain.programs import program_attention_state
+from app.domain.health import program_health_evidence, program_health_state
 from app.domain.queries import (
     get_blocked_dependencies,
     get_blocked_work_items,
     get_critical_dependencies,
     get_critical_risks,
     get_overdue_work_items,
-    get_programs_needing_attention,
+    get_programs_by_health,
     get_recently_updated_programs,
     get_stale_dependencies,
     get_stale_risks,
@@ -48,7 +48,14 @@ DEPENDENCY_TYPES = (
 DEPENDENCY_STATUSES = ("open", "in_progress", "confirmed", "blocked", "resolved", "cancelled")
 BLOCKING_LEVELS = ("low", "medium", "high", "critical")
 BLOCKING_LEVEL_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-ATTENTION_STATES = ("Needs attention", "OK", "Inactive")
+HEALTH_STATES = ("off_track", "at_risk", "needs_attention", "on_track", "inactive")
+HEALTH_STATE_CSS = {
+    "off_track": "off-track",
+    "at_risk": "at-risk",
+    "needs_attention": "attention",
+    "on_track": "ok",
+    "inactive": "",
+}
 RISK_STATUSES = ("open", "monitoring", "mitigated", "resolved", "accepted")
 RISK_SEVERITIES = ("low", "medium", "high", "critical")
 RISK_LIKELIHOODS = ("unlikely", "possible", "likely", "very_likely")
@@ -86,7 +93,8 @@ _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 templates.env.globals.update(
     {
-        "program_attention_state": program_attention_state,
+        "program_health_state": program_health_state,
+        "program_health_evidence": program_health_evidence,
         "work_item_is_overdue": work_item_is_overdue,
         "work_item_is_stale": work_item_is_stale,
         "dependency_is_stale": dependency_is_stale,
@@ -103,7 +111,8 @@ templates.env.globals.update(
         "WORK_ITEM_SORT_LABELS": WORK_ITEM_SORT_LABELS,
         "DEPENDENCY_SORT_LABELS": DEPENDENCY_SORT_LABELS,
         "RISK_SORT_LABELS": RISK_SORT_LABELS,
-        "ATTENTION_STATES": ATTENTION_STATES,
+        "HEALTH_STATES": HEALTH_STATES,
+        "HEALTH_STATE_CSS": HEALTH_STATE_CSS,
     }
 )
 templates.env.filters.update(
@@ -133,7 +142,7 @@ def _query_string(**params: str) -> str:
 def program_ui(
     request: Request,
     status_filter: Optional[str] = None,
-    attention_filter: Optional[str] = None,
+    health_filter: Optional[str] = None,
     sort: str = "updated_at",
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
@@ -146,14 +155,15 @@ def program_ui(
 
     if status_filter and status_filter not in active_slugs:
         status_filter = None
-    if attention_filter and attention_filter not in ATTENTION_STATES:
-        attention_filter = None
+    if health_filter and health_filter not in HEALTH_STATES:
+        health_filter = None
     if sort not in PROGRAM_SORTS and sort != "status":
         sort = "updated_at"
 
     statement = select(Program).options(
         selectinload(Program.work_items),
         selectinload(Program.dependencies),
+        selectinload(Program.risks),
     )
     if status_filter:
         statement = statement.join(Program.program_status).where(ProgramStatus.slug == status_filter)
@@ -164,8 +174,8 @@ def program_ui(
     else:
         statement = statement.order_by(PROGRAM_SORTS[sort], Program.id.desc())
     programs = list(db.scalars(statement))
-    if attention_filter:
-        programs = [p for p in programs if program_attention_state(p) == attention_filter]
+    if health_filter:
+        programs = [p for p in programs if program_health_state(p) == health_filter]
 
     return templates.TemplateResponse(
         request,
@@ -174,7 +184,7 @@ def program_ui(
             "all_statuses": all_statuses,
             "programs": programs,
             "status_filter": status_filter,
-            "attention_filter": attention_filter,
+            "health_filter": health_filter,
             "sort": sort,
         },
     )
@@ -364,6 +374,8 @@ def program_detail(
     ).one_or_none()
     if program is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+    health = program_health_state(program)
+    health_evidence = program_health_evidence(program)
     source_types = list(db.scalars(select(SourceType).order_by(SourceType.name.asc())))
 
     if work_status_filter and work_status_filter not in WORK_ITEM_STATUSES:
@@ -465,6 +477,8 @@ def program_detail(
         "program_detail.html",
         {
             "program": program,
+            "health": health,
+            "health_evidence": health_evidence,
             "source_types": source_types,
             "work_items": work_items,
             "work_status_filter": work_status_filter,
@@ -1071,12 +1085,15 @@ def delete_program_status_from_ui(status_id: int, db: Session = Depends(get_db))
 
 @router.get("/morning", response_class=HTMLResponse, include_in_schema=False)
 def morning_view(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    health_buckets = get_programs_by_health(db)
     return templates.TemplateResponse(
         request,
         "morning.html",
         {
             "today": date.today(),
-            "programs_needing_attention": get_programs_needing_attention(db),
+            "programs_off_track": health_buckets["off_track"],
+            "programs_at_risk": health_buckets["at_risk"],
+            "programs_needing_attention": health_buckets["needs_attention"],
             "blocked_work_items": get_blocked_work_items(db),
             "blocked_dependencies": get_blocked_dependencies(db),
             "overdue_work_items": get_overdue_work_items(db),

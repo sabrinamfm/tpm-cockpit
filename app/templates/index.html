@@ -49,11 +49,11 @@
         </select>
       </div>
       <div>
-        <label for="attention_filter">Attention</label>
-        <select id="attention_filter" name="attention_filter">
-          <option value="">All attention states</option>
-          {% for attention in ATTENTION_STATES %}
-            <option value="{{ attention }}"{% if attention == attention_filter %} selected{% endif %}>{{ attention }}</option>
+        <label for="health_filter">Health</label>
+        <select id="health_filter" name="health_filter">
+          <option value="">All health states</option>
+          {% for h in HEALTH_STATES %}
+            <option value="{{ h }}"{% if h == health_filter %} selected{% endif %}>{{ h | replace('_', ' ') | title }}</option>
           {% endfor %}
         </select>
       </div>
@@ -76,20 +76,19 @@
           <th>Name</th>
           <th>Description</th>
           <th>Status</th>
-          <th>Attention</th>
+          <th>Health</th>
           <th>Updated</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for program in programs %}
-          {% set attention = program_attention_state(program) %}
-          {% set attention_class = "ok" if attention == "OK" else ("attention" if attention == "Needs attention" else "") %}
+          {% set health = program_health_state(program) %}
           <tr>
             <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
             <td>{{ program.description or "" }}</td>
             <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
-            <td><span class="pill {{ attention_class }}">{{ attention }}</span></td>
+            <td><span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span></td>
             <td>{{ program.updated_at | format_datetime }}</td>
             <td class="row-actions">
               <details class="action-menu">

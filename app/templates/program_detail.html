@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ program.name }}{% endblock %}
 {% block content %}
-{% set attention = program_attention_state(program) %}
-{% set attention_class = "ok" if attention == "OK" else ("attention" if attention == "Needs attention" else "") %}
 <header>
   <div>
     <h1>{{ program.name }}</h1>
@@ -18,8 +16,14 @@
   <h2>Overview</h2>
   <p>{{ program.description or "No description yet." }}</p>
   <div class="detail-grid">
-    <div><strong>Status</strong><br><span class="pill">{{ program.status }}</span></div>
-    <div><strong>Attention</strong><br><span class="pill {{ attention_class }}">{{ attention }}</span></div>
+    <div><strong>Status</strong><br><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></div>
+    <div>
+      <strong>Health</strong><br>
+      <span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span>
+      {% if health_evidence %}
+        <div class="muted" style="margin-top:6px;font-size:13px;">{{ health_evidence | join(" · ") }}</div>
+      {% endif %}
+    </div>
     <div><strong>Created</strong><br>{{ program.created_at | format_datetime }}</div>
     <div><strong>Updated</strong><br>{{ program.updated_at | format_datetime }}</div>
   </div>

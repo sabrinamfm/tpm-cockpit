@@ -186,6 +186,32 @@ def get_programs_needing_attention(
     )
 
 
+def get_programs_by_health(
+    db: Session, now: Optional[datetime] = None
+) -> dict[str, list[Program]]:
+    from app.domain.health import program_health_state
+    now = now or datetime.now(timezone.utc)
+    programs = list(
+        db.scalars(
+            select(Program)
+            .options(
+                selectinload(Program.work_items),
+                selectinload(Program.dependencies),
+                selectinload(Program.risks),
+            )
+            .join(Program.program_status)
+            .where(ProgramStatus.is_operational.is_(True))
+            .order_by(Program.updated_at.desc())
+        )
+    )
+    buckets: dict[str, list[Program]] = {"off_track": [], "at_risk": [], "needs_attention": []}
+    for p in programs:
+        state = program_health_state(p, now=now)
+        if state in buckets:
+            buckets[state].append(p)
+    return buckets
+
+
 def get_recently_updated_programs(db: Session, limit: int = 10) -> list[Program]:
     return list(
         db.scalars(
