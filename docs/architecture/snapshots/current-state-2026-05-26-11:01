@@ -1,0 +1,147 @@
+ ---
+  1. Files changed
+
+  New:
+  - app/models/status_report.py
+  - app/schemas/status_report.py
+  - app/api/routes/status_reports.py
+  - alembic/versions/20260526_0012_create_status_reports.py
+  - tests/test_status_reports.py
+  
+  Modified:
+  - app/domain/health.py — added compute_suggested_health
+  - app/models/program.py — added status_reports relationship
+  - app/models/__init__.py — exported StatusReport
+  - app/main.py — registered status_reports_router
+  - app/api/routes/ui.py — STATUS_REPORT_HEALTHS constant and global; latest-reports query on the list route; status_reports / edit_report / today on detail route; four UI handlers
+  - app/templates/index.html — "Report" column
+  - app/templates/program_detail.html — Status Reports section
+
+  ---
+  2. StatusReport model fields
+
+  ┌──────────────────┬───────────────┬──────────┬─────────────────────────────────────────────┐
+  │      Field       │     Type      │ Nullable │                    Notes                    │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ id               │ Integer PK    │ —        │                                             │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ program_id       │ FK → programs │ No       │ CASCADE delete                              │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ report_date      │ Date          │ No       │ TPM-provided                                │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ reported_health  │ String(20)    │ No       │ CheckConstraint: on_track|at_risk|off_track │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ suggested_health │ String(20)    │ No       │ CheckConstraint: on_track|at_risk|off_track │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ health_rationale │ Text          │ Yes      │                                             │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ summary          │ Text          │ Yes      │                                             │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ created_at       │ DateTime tz   │ No       │ server_default                              │
+  ├──────────────────┼───────────────┼──────────┼─────────────────────────────────────────────┤
+  │ updated_at       │ DateTime tz   │ No       │ server_default + onupdate                   │
+  └──────────────────┴───────────────┴──────────┴─────────────────────────────────────────────┘
+
+  ---
+  3. Migration added
+
+  20260526_0012_create_status_reports.py — creates status_reports table with both CheckConstraints, DOWN_REVISION = 20260525_0011. Correct chain.
+
+  ---
+  4. API routes added
+
+  ┌────────┬───────────────────────────────┬────────┬─────────────────────────────────────────────────────────┐
+  │ Method │             Path              │ Status │                       Description                       │
+  ├────────┼───────────────────────────────┼────────┼─────────────────────────────────────────────────────────┤
+  │ POST   │ /programs/{id}/status-reports │ 201    │ Create; computes suggested_health                       │
+  ├────────┼───────────────────────────────┼────────┼─────────────────────────────────────────────────────────┤
+  │ GET    │ /programs/{id}/status-reports │ 200    │ List, newest first                                      │
+  ├────────┼───────────────────────────────┼────────┼─────────────────────────────────────────────────────────┤
+  │ GET    │ /status-reports/{id}          │ 200    │ Single                                                  │
+  ├────────┼───────────────────────────────┼────────┼─────────────────────────────────────────────────────────┤
+  │ PATCH  │ /status-reports/{id}          │ 200    │ Update reported_health, report_date, rationale, summary │
+  ├────────┼───────────────────────────────┼────────┼─────────────────────────────────────────────────────────┤
+  │ DELETE │ /status-reports/{id}          │ 204    │ Delete                                                  │
+  └────────┴───────────────────────────────┴────────┴─────────────────────────────────────────────────────────┘
+
+  All return 404 for missing program/report.
+
+  ---
+  5. UI routes/templates changed
+
+  Routes in ui.py:
+  - POST /programs/{id}/status-reports/create — validates reported_health against STATUS_REPORT_HEALTHS, computes suggested_health, redirects to detail
+  - POST /status-reports/{id}/update — patches reported_health, report_date, rationale, summary; does NOT recompute suggested_health
+  - GET /status-reports/{id}/delete/confirm — confirm page
+  - POST /status-reports/{id}/delete — deletes, redirects to program detail
+  
+  index.html: Added "Report" column (7th, after "Health"). Shows latest reported_health pill or "No report yet".
+
+  program_detail.html: Added "Status Reports" section after Risks with: collapsible new-report form, table of all reports (newest first, latest row subtly highlighted), inline edit form on ?edit_report_id=, delete via confirm page,
+  divergence indicator (↑) when reported_health ≠ suggested_health.
+
+  ---
+  6. How reported_health and suggested_health are handled
+  
+  suggested_health is computed server-side at creation by compute_suggested_health(program) in app/domain/health.py. It calls program_health_state (5-state) and maps: off_track → off_track, at_risk | needs_attention → at_risk,
+  on_track | inactive → on_track. It is stored once and never recomputed on edit — patching a report does not change suggested_health.
+
+  reported_health is TPM-declared. Accepted on create and on edit. Validated against STATUS_REPORT_HEALTHS = ("on_track", "at_risk", "off_track") in the UI handler. Schema uses Literal["on_track", "at_risk", "off_track"]. Database
+  CheckConstraint enforces it at the storage layer.
+
+  ---
+  7. Health values — only on_track / at_risk / off_track?
+  
+  Yes, enforced at three layers:
+  1. Pydantic schema: Literal["on_track", "at_risk", "off_track"] on StatusReportCreate.reported_health
+  2. UI validation: reported_health not in STATUS_REPORT_HEALTHS gate before creation
+  3. DB CheckConstraints on both reported_health and suggested_health
+
+  ---
+  8. needs_attention not used as a health value?
+  
+  Confirmed — never stored. needs_attention appears in three places, all correct:
+  - HEALTH_STATES (the 5-state computed health tuple for the program list filter — unrelated to reports)
+  - compute_suggested_health() maps it to "at_risk" before storage
+  - One test function name (test_suggested_health_at_risk_for_needs_attention) — tests that the mapping works correctly
+
+  needs_attention cannot appear in any StatusReport row because the CheckConstraint excludes it.
+
+  ---
+  9. Tests added or updated
+
+  29 new tests in tests/test_status_reports.py:
+
+  - compute_suggested_health domain (5): clean program, inactive, needs_attention→at_risk, at_risk, off_track
+  - API CRUD (8): create full, create minimal, server-computes suggested_health, list (order), get, patch, patch doesn't change suggested_health, delete
+  - API 404 (5): create/list/get/patch/delete with missing resource
+  - Cascade (1): program delete removes reports
+  - UI detail (5): section present, empty state, create from form, update from form, delete from form
+  - UI detail display (2): latest shown first, divergence indicator
+  - UI list (3): no report yet, shows latest reported_health, shows latest not oldest
+
+  No existing tests were modified.
+
+  ---
+  10. Documentation now outdated
+  
+  - docs/architecture/snapshots/current-state-2026-05-25.md — already outdated before this work (noted as a snapshot of 2026-05-25 state). Does not mention Status Reports, Program Health, or Risks.
+  - docs/domain-model/core-objects.md — StatusReport not listed; lists Risk as "Planned" (now implemented).
+  - docs/domain-model/relationships.md — does not reflect Program → StatusReport.
+  - app/CLAUDE.md — product model still shows "Planned" objects but is used as dev guidance, not a feature list; low urgency.
+
+  ---
+  11. Behavioral consistency
+
+  No inconsistencies found. Specific checks:
+
+  - Morning View — unchanged. Shows the 5-state computed health buckets (Off Track / At Risk / Needing Attention) based on live operational signals. Status Reports are separate and do not affect it.
+  - Risks, Work Items, Dependencies — no interaction with Status Reports. The create handler loads them read-only to compute suggested_health, then releases.
+  - Program Health (computed) — the Health column on the program list still shows live computed state. The Report column next to it shows the last declared state. These are visually distinct and conceptually correct.
+  - Cascade deletes — program_id FK has ondelete="CASCADE", matching the pattern used by WorkItem, Dependency, and Risk.
+  - One minor cleanliness issue (not a bug): Dependency, Risk, WorkItem are imported in status_reports.py but unused — selectinload(Program.work_items) etc. only requires Program to be in scope. No functional impact.
+
+  ---
+  Test suite result
+
+  213 passed, 0 failed in 4.5s. All 184 pre-existing tests continue to pass; all 29 new tests pass.
