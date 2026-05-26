@@ -8,6 +8,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.program_status import ProgramStatus
+    from app.models.status_report import StatusReport
 
 
 class Program(Base):
@@ -48,6 +49,11 @@ class Program(Base):
     )
     risks: Mapped[list["Risk"]] = relationship(
         "Risk",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
+    status_reports: Mapped[list["StatusReport"]] = relationship(
+        "StatusReport",
         back_populates="program",
         cascade="all, delete-orphan",
     )

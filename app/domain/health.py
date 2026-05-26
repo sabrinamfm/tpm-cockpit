@@ -82,6 +82,16 @@ def program_health_evidence(
     return evidence
 
 
+def compute_suggested_health(program: HealthProgramLike) -> str:
+    """Map 5-state computed health to the 3-state scale used in status reports."""
+    state = program_health_state(program)
+    if state == HEALTH_OFF_TRACK:
+        return "off_track"
+    if state in (HEALTH_AT_RISK, HEALTH_NEEDS_ATTENTION):
+        return "at_risk"
+    return "on_track"
+
+
 def program_health_state(
     program: HealthProgramLike, now: Optional[datetime] = None
 ) -> str:

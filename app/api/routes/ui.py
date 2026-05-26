@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.domain.attention import dependency_is_stale, risk_is_critical, risk_is_stale, work_item_is_overdue, work_item_is_stale
-from app.domain.health import program_health_evidence, program_health_state
+from app.domain.health import compute_suggested_health, program_health_evidence, program_health_state
 from app.domain.queries import (
     get_blocked_dependencies,
     get_blocked_work_items,
@@ -24,7 +24,7 @@ from app.domain.queries import (
     get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Dependency, Program, ProgramStatus, Risk, SourceType, WorkItem
+from app.models import Dependency, Program, ProgramStatus, Risk, SourceType, StatusReport, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -49,6 +49,7 @@ DEPENDENCY_STATUSES = ("open", "in_progress", "confirmed", "blocked", "resolved"
 BLOCKING_LEVELS = ("low", "medium", "high", "critical")
 BLOCKING_LEVEL_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 HEALTH_STATES = ("off_track", "at_risk", "needs_attention", "on_track", "inactive")
+STATUS_REPORT_HEALTHS = ("on_track", "at_risk", "off_track")
 HEALTH_STATE_CSS = {
     "off_track": "off-track",
     "at_risk": "at-risk",
@@ -113,6 +114,7 @@ templates.env.globals.update(
         "RISK_SORT_LABELS": RISK_SORT_LABELS,
         "HEALTH_STATES": HEALTH_STATES,
         "HEALTH_STATE_CSS": HEALTH_STATE_CSS,
+        "STATUS_REPORT_HEALTHS": STATUS_REPORT_HEALTHS,
     }
 )
 templates.env.filters.update(
@@ -177,6 +179,17 @@ def program_ui(
     if health_filter:
         programs = [p for p in programs if program_health_state(p) == health_filter]
 
+    program_ids = [p.id for p in programs]
+    latest_reports: dict[int, StatusReport] = {}
+    if program_ids:
+        for report in db.scalars(
+            select(StatusReport)
+            .where(StatusReport.program_id.in_(program_ids))
+            .order_by(StatusReport.report_date.desc(), StatusReport.created_at.desc())
+        ):
+            if report.program_id not in latest_reports:
+                latest_reports[report.program_id] = report
+
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -186,6 +199,7 @@ def program_ui(
             "status_filter": status_filter,
             "health_filter": health_filter,
             "sort": sort,
+            "latest_reports": latest_reports,
         },
     )
 
@@ -361,6 +375,9 @@ def program_detail(
     show_new_risk: Optional[str] = None,
     risk_error: Optional[str] = None,
     edit_risk_id: Optional[int] = None,
+    show_new_report: Optional[str] = None,
+    report_error: Optional[str] = None,
+    edit_report_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     program = db.scalars(
@@ -369,6 +386,7 @@ def program_detail(
             selectinload(Program.work_items).selectinload(WorkItem.source_type),
             selectinload(Program.dependencies),
             selectinload(Program.risks),
+            selectinload(Program.status_reports),
         )
         .where(Program.id == program_id)
     ).one_or_none()
@@ -472,6 +490,15 @@ def program_detail(
     dep_owners = sorted({item.owner for item in program.dependencies if item.owner})
     risk_owners = sorted({r.owner for r in program.risks if r.owner})
 
+    status_reports = sorted(
+        program.status_reports,
+        key=lambda r: (r.report_date, r.created_at),
+        reverse=True,
+    )
+    edit_report = None
+    if edit_report_id is not None:
+        edit_report = next((r for r in status_reports if r.id == edit_report_id), None)
+
     return templates.TemplateResponse(
         request,
         "program_detail.html",
@@ -511,6 +538,11 @@ def program_detail(
             "risk_error": risk_error,
             "edit_risk": edit_risk,
             "risk_owners": risk_owners,
+            "status_reports": status_reports,
+            "show_new_report": show_new_report,
+            "report_error": report_error,
+            "edit_report": edit_report,
+            "today": date.today(),
         },
     )
 
@@ -896,6 +928,111 @@ def delete_risk_from_ui(risk_id: int, db: Session = Depends(get_db)) -> Redirect
 
     program_id = risk.program_id
     db.delete(risk)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Status Report UI handlers ─────────────────────────────────────────────────
+
+@router.post("/programs/{program_id}/status-reports/create", include_in_schema=False)
+async def create_status_report_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    program = db.scalars(
+        select(Program)
+        .options(
+            selectinload(Program.work_items),
+            selectinload(Program.dependencies),
+            selectinload(Program.risks),
+        )
+        .where(Program.id == program_id)
+    ).one_or_none()
+    if program is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    reported_health = parsed.get("reported_health", "")
+    report_date_str = parsed.get("report_date", "")
+    if reported_health not in STATUS_REPORT_HEALTHS or not report_date_str:
+        query = urlencode({
+            "show_new_report": "1",
+            "report_error": "Report date and health status are required.",
+        })
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-report",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    from datetime import date as _date
+    report = StatusReport(
+        program_id=program_id,
+        report_date=_date.fromisoformat(report_date_str),
+        reported_health=reported_health,
+        suggested_health=compute_suggested_health(program),
+        health_rationale=parsed.get("health_rationale", "").strip() or None,
+        summary=parsed.get("summary", "").strip() or None,
+    )
+    db.add(report)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/status-reports/{report_id}/update", include_in_schema=False)
+async def update_status_report_from_ui(
+    report_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    report = db.get(StatusReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
+
+    parsed = await _parse_form(request)
+    reported_health = parsed.get("reported_health", report.reported_health)
+    report_date_str = parsed.get("report_date", "")
+    if reported_health in STATUS_REPORT_HEALTHS:
+        report.reported_health = reported_health
+    if report_date_str:
+        from datetime import date as _date
+        report.report_date = _date.fromisoformat(report_date_str)
+    report.health_rationale = parsed.get("health_rationale", "").strip() or None
+    report.summary = parsed.get("summary", "").strip() or None
+    db.add(report)
+    db.commit()
+    return RedirectResponse(f"/programs/{report.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/status-reports/{report_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_status_report_page(
+    request: Request, report_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    report = db.get(StatusReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "page_title": "Delete Status Report?",
+            "subtitle": f"{report.report_date} — {report.reported_health.replace('_', ' ').title()}",
+            "back_url": f"/programs/{report.program_id}/view",
+            "back_label": "Back to Program",
+            "message": "This permanently removes the status report.",
+            "action_url": f"/status-reports/{report.id}/delete",
+            "cancel_url": f"/programs/{report.program_id}/view",
+        },
+    )
+
+
+@router.post("/status-reports/{report_id}/delete", include_in_schema=False)
+def delete_status_report_from_ui(report_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    report = db.get(StatusReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
+    program_id = report.program_id
+    db.delete(report)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 

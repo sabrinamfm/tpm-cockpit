@@ -77,6 +77,7 @@
           <th>Description</th>
           <th>Status</th>
           <th>Health</th>
+          <th>Report</th>
           <th>Updated</th>
           <th>Actions</th>
         </tr>
@@ -89,6 +90,14 @@
             <td>{{ program.description or "" }}</td>
             <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
             <td><span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span></td>
+            <td>
+              {% set latest_report = latest_reports.get(program.id) %}
+              {% if latest_report %}
+                <span class="pill {{ HEALTH_STATE_CSS[latest_report.reported_health] }}">{{ latest_report.reported_health | replace('_', ' ') | title }}</span>
+              {% else %}
+                <span class="muted">No report yet</span>
+              {% endif %}
+            </td>
             <td>{{ program.updated_at | format_datetime }}</td>
             <td class="row-actions">
               <details class="action-menu">
@@ -102,7 +111,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="6" class="muted">No programs match the current view.</td>
+            <td colspan="7" class="muted">No programs match the current view.</td>
           </tr>
         {% endfor %}
       </tbody>

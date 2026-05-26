@@ -31,6 +31,111 @@
 
 <section class="panel">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h2>Status Reports</h2>
+  </div>
+
+  <details id="new-report" class="collapsible-panel"{% if show_new_report == "1" or report_error %} open{% endif %}>
+    <summary class="button">New Status Report</summary>
+    <div class="collapsible-body">
+      {% if report_error %}<div class="error">{{ report_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/status-reports/create">
+        <div class="compact-fields">
+          <div>
+            <label for="report-date">Report Date</label>
+            <input id="report-date" name="report_date" type="date" value="{{ today }}" required>
+          </div>
+          <div>
+            <label for="report-health">Reported Health</label>
+            <select id="report-health" name="reported_health">
+              {% for h in STATUS_REPORT_HEALTHS %}
+                <option value="{{ h }}">{{ h | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <label for="report-rationale">Health Rationale</label>
+        <textarea id="report-rationale" name="health_rationale" placeholder="Rationale for the declared health, especially if it differs from the system suggestion."></textarea>
+        <label for="report-summary">Summary</label>
+        <textarea id="report-summary" name="summary" placeholder="Current state of the program."></textarea>
+        <div class="actions">
+          <button type="submit">Save Report</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if status_reports %}
+  <table>
+    <thead>
+      <tr><th>Date</th><th>Reported</th><th>Suggested</th><th>Rationale / Summary</th><th class="row-actions">Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for report in status_reports %}
+        {% if edit_report and edit_report.id == report.id %}
+        <tr>
+          <td colspan="5" style="padding:12px 10px;">
+            <form method="post" action="/status-reports/{{ report.id }}/update">
+              <div class="compact-fields">
+                <div>
+                  <label>Report Date</label>
+                  <input name="report_date" type="date" value="{{ report.report_date | format_date }}" required>
+                </div>
+                <div>
+                  <label>Reported Health</label>
+                  <select name="reported_health">
+                    {% for h in STATUS_REPORT_HEALTHS %}
+                      <option value="{{ h }}"{% if h == report.reported_health %} selected{% endif %}>{{ h | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <label>Health Rationale</label>
+              <textarea name="health_rationale">{{ report.health_rationale or "" }}</textarea>
+              <label>Summary</label>
+              <textarea name="summary">{{ report.summary or "" }}</textarea>
+              <div class="actions">
+                <button type="submit">Save</button>
+                <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr{% if loop.first %} style="background:#f8fafc;"{% endif %}>
+          <td>{{ report.report_date | format_date }}{% if loop.first %}<br><span class="muted" style="font-size:11px;">latest</span>{% endif %}</td>
+          <td><span class="pill {{ HEALTH_STATE_CSS[report.reported_health] }}">{{ report.reported_health | replace('_', ' ') | title }}</span></td>
+          <td class="muted">
+            {{ report.suggested_health | replace('_', ' ') | title }}
+            {% if report.reported_health != report.suggested_health %}
+              <span title="Reported differs from suggested" style="color:#b45309;">↑</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if report.health_rationale %}<div>{{ report.health_rationale | truncate(80) }}</div>{% endif %}
+            {% if report.summary %}<div class="muted">{{ report.summary | truncate(80) }}</div>{% endif %}
+          </td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_report_id={{ report.id }}">Edit</a>
+                <a href="/status-reports/{{ report.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">No status reports yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <h2>Work Items</h2>
   </div>
 
