@@ -18,6 +18,7 @@ class ProgramUpdate(BaseModel):
 
 class ProgramRead(BaseModel):
     id: int
+    display_id: Optional[str] = None
     name: str
     description: Optional[str]
     status_id: int

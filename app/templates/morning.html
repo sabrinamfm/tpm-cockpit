@@ -18,7 +18,7 @@
     <tbody>
       {% for program in programs_off_track %}
       <tr class="critical-row">
-        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>{% if program.display_id %}<span class="display-id">{{ program.display_id }}</span>{% endif %}<a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
         <td>
           <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
             {{ program.program_status.name }}
@@ -44,7 +44,7 @@
     <tbody>
       {% for program in programs_at_risk %}
       <tr class="overdue-row">
-        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>{% if program.display_id %}<span class="display-id">{{ program.display_id }}</span>{% endif %}<a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
         <td>
           <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
             {{ program.program_status.name }}
@@ -70,7 +70,7 @@
     <tbody>
       {% for program in programs_needing_attention %}
       <tr class="attention-row">
-        <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+        <td>{% if program.display_id %}<span class="display-id">{{ program.display_id }}</span>{% endif %}<a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
         <td>
           <span class="pill" style="background: {{ program.program_status.color }}20; color: {{ program.program_status.color }}">
             {{ program.program_status.name }}

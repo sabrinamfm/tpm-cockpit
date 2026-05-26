@@ -38,6 +38,7 @@ class RiskUpdate(BaseModel):
 
 class RiskRead(RiskBase):
     id: int
+    display_id: Optional[str] = None
     program_id: int
     created_at: datetime
     updated_at: datetime

@@ -86,7 +86,7 @@
         {% for program in programs %}
           {% set health = program_health_state(program) %}
           <tr>
-            <td><a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+            <td>{% if program.display_id %}<span class="display-id">{{ program.display_id }}</span>{% endif %}<a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
             <td>{{ program.description or "" }}</td>
             <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
             <td><span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span></td>

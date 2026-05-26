@@ -16,6 +16,7 @@
   <h2>Overview</h2>
   <p>{{ program.description or "No description yet." }}</p>
   <div class="detail-grid">
+    {% if program.display_id %}<div><strong>ID</strong><br><span class="display-id" style="font-size:13px;">{{ program.display_id }}</span></div>{% endif %}
     <div><strong>Status</strong><br><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></div>
     <div>
       <strong>Health</strong><br>
@@ -103,7 +104,7 @@
         </tr>
         {% else %}
         <tr{% if loop.first %} style="background:#f8fafc;"{% endif %}>
-          <td>{{ report.report_date | format_date }}{% if loop.first %}<br><span class="muted" style="font-size:11px;">latest</span>{% endif %}</td>
+          <td>{% if report.display_id %}<span class="display-id">{{ report.display_id }}</span><br>{% endif %}{{ report.report_date | format_date }}{% if loop.first %}<br><span class="muted" style="font-size:11px;">latest</span>{% endif %}</td>
           <td><span class="pill {{ HEALTH_STATE_CSS[report.reported_health] }}">{{ report.reported_health | replace('_', ' ') | title }}</span></td>
           <td class="muted">
             {{ report.suggested_health | replace('_', ' ') | title }}
@@ -346,7 +347,7 @@
         {% set stale = work_item_is_stale(item) %}
         {% set row_class = "blocked-row" if blocked else "overdue-row" if overdue else "stale-row" if stale else "" %}
         <tr class="{{ row_class }}">
-          <td>{{ item.title }}</td>
+          <td>{% if item.display_id %}<span class="display-id">{{ item.display_id }}</span>{% endif %}{{ item.title }}</td>
           <td><span class="pill">{{ item.status }}</span></td>
           <td><span class="pill">{{ item.priority }}</span></td>
           <td>{{ item.owner or "" }}</td>
@@ -585,7 +586,7 @@
         {% set row_class = "blocked-row" if blocked else "critical-row" if critical else "stale-row" if stale_dep else "" %}
         <tr class="{{ row_class }}">
           <td>
-            {{ dep.title }}
+            {% if dep.display_id %}<span class="display-id">{{ dep.display_id }}</span>{% endif %}{{ dep.title }}
             {% if blocked %}<span class="pill attention">Blocked</span>{% endif %}
             {% if critical %}<span class="pill attention">Critical</span>{% endif %}
             {% if stale_dep %}<span class="pill attention">Stale</span>{% endif %}
@@ -803,7 +804,7 @@
         {% set row_class = "critical-row" if is_critical else "stale-row" if is_stale else "" %}
         <tr class="{{ row_class }}">
           <td>
-            {{ risk.title }}
+            {% if risk.display_id %}<span class="display-id">{{ risk.display_id }}</span>{% endif %}{{ risk.title }}
             {% if is_critical %}<span class="pill attention">Critical</span>{% endif %}
             {% if is_stale %}<span class="pill attention">Stale</span>{% endif %}
           </td>
