@@ -16,7 +16,7 @@
   <h2>Overview</h2>
   <p>{{ program.description or "No description yet." }}</p>
   <div class="detail-grid">
-    {% if program.display_id %}<div><strong>ID</strong><br><span class="display-id" style="font-size:13px;">{{ program.display_id }}</span></div>{% endif %}
+    {% if program.display_id %}<div><strong>ID</strong><br><span class="display-id display-id--lg">{{ program.display_id }}</span></div>{% endif %}
     <div><strong>Status</strong><br><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></div>
     <div>
       <strong>Health</strong><br>

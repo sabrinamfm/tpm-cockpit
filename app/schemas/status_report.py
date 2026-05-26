@@ -22,7 +22,7 @@ class StatusReportUpdate(BaseModel):
 
 class StatusReportRead(BaseModel):
     id: int
-    display_id: Optional[str] = None
+    display_id: str
     program_id: int
     report_date: date
     reported_health: str
