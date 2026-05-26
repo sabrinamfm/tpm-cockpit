@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_settings
@@ -15,20 +15,18 @@ _DISPLAY_ID_PREFIXES: dict[str, str] = {
 
 
 def _register_display_id_events() -> None:
-    """Register after_insert mapper events to auto-assign display IDs within the same transaction."""
+    """Register before_insert mapper events to assign display IDs before the INSERT is emitted."""
     from app.db.base import Base
 
-    @event.listens_for(Base, "after_insert", propagate=True)
+    @event.listens_for(Base, "before_insert", propagate=True)
     def _assign_display_id(mapper, connection, target):
         prefix = _DISPLAY_ID_PREFIXES.get(getattr(target.__class__, "__tablename__", None))
-        if prefix and target.id and not target.display_id:
-            display_id = f"{prefix}-{target.id:03d}"
-            target.display_id = display_id
-            connection.execute(
-                target.__table__.update()
-                .where(target.__table__.c.id == target.id)
-                .values(display_id=display_id)
-            )
+        if prefix and not target.display_id:
+            # MAX(id)+1 matches SQLite's next PK assignment for non-AUTOINCREMENT tables.
+            next_id = connection.execute(
+                text(f"SELECT COALESCE(MAX(id), 0) + 1 FROM {target.__tablename__}")
+            ).scalar()
+            target.display_id = f"{prefix}-{next_id:03d}"
 
 
 _register_display_id_events()

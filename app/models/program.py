@@ -15,7 +15,7 @@ class Program(Base):
     __tablename__ = "programs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    display_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, unique=True, index=True)
+    display_id: Mapped[str] = mapped_column(String(20), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status_id: Mapped[int] = mapped_column(

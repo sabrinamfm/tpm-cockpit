@@ -21,7 +21,7 @@ class StatusReport(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    display_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, unique=True, index=True)
+    display_id: Mapped[str] = mapped_column(String(20), nullable=False, unique=True, index=True)
     program_id: Mapped[int] = mapped_column(
         ForeignKey("programs.id", ondelete="CASCADE"),
         nullable=False,

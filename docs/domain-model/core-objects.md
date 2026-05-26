@@ -4,11 +4,15 @@
 - Program
 - Work Item
 - Dependency
-- Program Status
-- Source Type
+- Risk
+- Status Report
+- Program Status (configuration)
+- Source Type (configuration)
+
+All core objects carry a stable display ID (e.g. `PRG-001`, `WI-042`) assigned at creation and never changed.
 
 ## Planned
-- Risk
+- Relationship
 - Decision
 - Note
 - Stakeholder

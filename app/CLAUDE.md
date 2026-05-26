@@ -48,14 +48,19 @@ Avoid:
 - no React unless explicitly needed
 
 ## Current Product Model
-Program 
+Program
 → Work Items
+→ Dependencies
+→ Risks
+→ Status Reports
 
 ## Planned Product Model
-Program 
+Program
 → Work Items
-→ Risks
 → Dependencies
+→ Risks
+→ Status Reports
+→ Relationships
 → Decisions
 → Notes
 
