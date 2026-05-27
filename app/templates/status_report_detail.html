@@ -47,186 +47,134 @@
 
 <section class="panel" style="margin-bottom:20px;">
   <h2>Operational Context</h2>
-  <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:16px;">
 
-    <div>
-      <h3>Risks</h3>
-      {% set active_risks = program.risks | selectattr("status", "in", ["open", "monitoring", "accepted"]) | list %}
-      {% if active_risks %}
-        <table>
-          <thead><tr><th>Risk</th><th>Status</th><th>Likelihood / Impact</th></tr></thead>
-          <tbody>
-            {% for r in active_risks %}
-              <tr>
-                <td><span class="display-id">{{ r.display_id }}</span>{{ r.title }}</td>
-                <td>{{ r.status | replace('_', ' ') | title }}</td>
-                <td class="muted">{{ r.likelihood | replace('_', ' ') | title }} / {{ r.severity | title }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No active risks.</p>
-      {% endif %}
-    </div>
-
-    <div>
-      <h3>Work Items</h3>
-      {% set blocked_wi = program.work_items | selectattr("status", "equalto", "blocked") | list %}
-      {% set overdue_wi = program.work_items | selectattr("status", "in", ["open", "in_progress", "blocked"]) | selectattr("due_date", "ne", None) | list %}
-      {% set attention_wi = (blocked_wi + overdue_wi) | unique(attribute="id") | list %}
-      {% if attention_wi %}
-        <table>
-          <thead><tr><th>Work Item</th><th>Status</th></tr></thead>
-          <tbody>
-            {% for wi in attention_wi %}
-              <tr>
-                <td><span class="display-id">{{ wi.display_id }}</span>{{ wi.title }}</td>
-                <td>{{ wi.status | replace('_', ' ') | title }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No blocked or overdue work items.</p>
-      {% endif %}
-    </div>
-
-    <div>
-      <h3>Dependencies</h3>
-      {% set blocked_deps = program.dependencies | selectattr("status", "equalto", "blocked") | list %}
-      {% set critical_deps = program.dependencies | selectattr("blocking_level", "equalto", "critical") | selectattr("status", "in", ["open", "in_progress", "blocked"]) | list %}
-      {% set attention_deps = (blocked_deps + critical_deps) | unique(attribute="id") | list %}
-      {% if attention_deps %}
-        <table>
-          <thead><tr><th>Dependency</th><th>Status</th><th>Level</th></tr></thead>
-          <tbody>
-            {% for d in attention_deps %}
-              <tr>
-                <td><span class="display-id">{{ d.display_id }}</span>{{ d.title }}</td>
-                <td>{{ d.status | replace('_', ' ') | title }}</td>
-                <td>{{ d.blocking_level | title }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No blocked or critical dependencies.</p>
-      {% endif %}
-    </div>
-
-    <div>
-      <h3>Milestones</h3>
-      {% set active_ms = program.milestones | selectattr("status", "in", ["planned", "on_track", "at_risk", "off_track", "blocked"]) | list %}
-      {% if active_ms %}
-        <table>
-          <thead><tr><th>Milestone</th><th>Status</th><th>Target</th></tr></thead>
-          <tbody>
-            {% for ms in active_ms %}
-              <tr>
-                <td><span class="display-id">{{ ms.display_id }}</span>{{ ms.title }}</td>
-                <td>{{ ms.status | replace('_', ' ') | title }}</td>
-                <td class="muted">{{ ms.target_date | format_date }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No active milestones.</p>
-      {% endif %}
-    </div>
-
-    <div>
-      <h3>Features</h3>
-      {% set active_features = program.features | selectattr("status", "in", ["proposed", "planned", "in_progress", "blocked"]) | list %}
-      {% if active_features %}
-        <table>
-          <thead><tr><th>Feature</th><th>Status</th></tr></thead>
-          <tbody>
-            {% for ft in active_features %}
-              <tr>
-                <td><span class="display-id">{{ ft.display_id }}</span>{{ ft.title }}</td>
-                <td>{{ ft.status | replace('_', ' ') | title }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No active features.</p>
-      {% endif %}
-    </div>
-
-    <div>
-      <h3>Requirements</h3>
-      {% set active_reqs = program.requirements | selectattr("status", "in", ["proposed", "accepted", "in_progress"]) | list %}
-      {% if active_reqs %}
-        <table>
-          <thead><tr><th>Requirement</th><th>Status</th></tr></thead>
-          <tbody>
-            {% for req in active_reqs %}
-              <tr>
-                <td><span class="display-id">{{ req.display_id }}</span>{{ req.title }}</td>
-                <td>{{ req.status | replace('_', ' ') | title }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No active requirements.</p>
-      {% endif %}
-    </div>
-
-    <div>
-      <h3>Open Decisions</h3>
-      {% set open_decisions = program.decisions | selectattr("status", "equalto", "proposed") | list %}
-      {% if open_decisions %}
-        <table>
-          <thead><tr><th>Decision</th><th>Owner</th></tr></thead>
-          <tbody>
-            {% for dec in open_decisions %}
-              <tr>
-                <td><span class="display-id">{{ dec.display_id }}</span>{{ dec.title }}</td>
-                <td class="muted">{{ dec.owner or "—" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="muted empty-state">No open decisions.</p>
-      {% endif %}
-    </div>
-
+  <div style="margin-bottom:20px;">
+    <h3>Milestones</h3>
+    {% set active_ms = program.milestones | selectattr("status", "in", ["planned", "on_track", "at_risk", "off_track", "blocked"]) | list %}
+    {% if active_ms %}
+      <table>
+        <thead><tr><th>Milestone</th><th>Status</th><th>Target</th></tr></thead>
+        <tbody>
+          {% for ms in active_ms %}
+            <tr>
+              <td><span class="display-id">{{ ms.display_id }}</span>{{ ms.title }}</td>
+              <td>{{ ms.status | replace('_', ' ') | title }}</td>
+              <td class="muted">{{ ms.target_date | format_date }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted empty-state">No active milestones.</p>
+    {% endif %}
   </div>
+
+  <div style="margin-bottom:20px;">
+    <h3>Requirements</h3>
+    {% set active_reqs = program.requirements | selectattr("status", "in", ["proposed", "accepted", "in_progress"]) | list %}
+    {% if active_reqs %}
+      <table>
+        <thead><tr><th>Requirement</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for req in active_reqs %}
+            <tr>
+              <td><span class="display-id">{{ req.display_id }}</span>{{ req.title }}</td>
+              <td>{{ req.status | replace('_', ' ') | title }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted empty-state">No active requirements.</p>
+    {% endif %}
+  </div>
+
+  <div style="margin-bottom:20px;">
+    <h3>Features</h3>
+    {% set active_features = program.features | selectattr("status", "in", ["proposed", "planned", "in_progress", "blocked"]) | list %}
+    {% if active_features %}
+      <table>
+        <thead><tr><th>Feature</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for ft in active_features %}
+            <tr>
+              <td><span class="display-id">{{ ft.display_id }}</span>{{ ft.title }}</td>
+              <td>{{ ft.status | replace('_', ' ') | title }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted empty-state">No active features.</p>
+    {% endif %}
+  </div>
+
+  <div style="margin-bottom:20px;">
+    <h3>Dependencies</h3>
+    {% set blocked_deps = program.dependencies | selectattr("status", "equalto", "blocked") | list %}
+    {% set critical_deps = program.dependencies | selectattr("blocking_level", "equalto", "critical") | selectattr("status", "in", ["open", "in_progress", "blocked"]) | list %}
+    {% set attention_deps = (blocked_deps + critical_deps) | unique(attribute="id") | list %}
+    {% if attention_deps %}
+      <table>
+        <thead><tr><th>Dependency</th><th>Status</th><th>Level</th></tr></thead>
+        <tbody>
+          {% for d in attention_deps %}
+            <tr>
+              <td><span class="display-id">{{ d.display_id }}</span>{{ d.title }}</td>
+              <td>{{ d.status | replace('_', ' ') | title }}</td>
+              <td>{{ d.blocking_level | title }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted empty-state">No blocked or critical dependencies.</p>
+    {% endif %}
+  </div>
+
+  <div style="margin-bottom:20px;">
+    <h3>Risks</h3>
+    {% set active_risks = program.risks | selectattr("status", "in", ["open", "monitoring", "accepted"]) | list %}
+    {% if active_risks %}
+      <table>
+        <thead><tr><th>Risk</th><th>Status</th><th>Likelihood / Severity</th></tr></thead>
+        <tbody>
+          {% for r in active_risks %}
+            <tr>
+              <td><span class="display-id">{{ r.display_id }}</span>{{ r.title }}</td>
+              <td>{{ r.status | replace('_', ' ') | title }}</td>
+              <td class="muted">{{ r.likelihood | replace('_', ' ') | title }} / {{ r.severity | title }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted empty-state">No active risks.</p>
+    {% endif %}
+  </div>
+
+  <div>
+    <h3>Open Decisions</h3>
+    {% set open_decisions = program.decisions | selectattr("status", "in", ["proposed", "deferred"]) | list %}
+    {% if open_decisions %}
+      <table>
+        <thead><tr><th>Decision</th><th>Status</th><th>Owner</th></tr></thead>
+        <tbody>
+          {% for dec in open_decisions %}
+            <tr>
+              <td><span class="display-id">{{ dec.display_id }}</span>{{ dec.title }}</td>
+              <td>{{ dec.status | replace('_', ' ') | title }}</td>
+              <td class="muted">{{ dec.owner or "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted empty-state">No open decisions.</p>
+    {% endif %}
+  </div>
+
 </section>
-
-<details id="edit-report" class="collapsible-panel" style="margin-bottom:20px;">
-  <summary class="button secondary">Edit Report</summary>
-  <div class="collapsible-body">
-    <form method="post" action="/status-reports/{{ report.id }}/update">
-      <input type="hidden" name="return_to" value="detail">
-      <div class="compact-fields">
-        <div>
-          <label>Report Date</label>
-          <input name="report_date" type="date" value="{{ report.report_date | format_date }}" required>
-        </div>
-        <div>
-          <label>Reported Health</label>
-          <select name="reported_health">
-            {% for h in STATUS_REPORT_HEALTHS %}
-              <option value="{{ h }}"{% if h == report.reported_health %} selected{% endif %}>{{ h | replace('_', ' ') | title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-      <label>Summary</label>
-      <textarea name="summary">{{ report.summary or "" }}</textarea>
-      <div class="actions">
-        <button type="submit">Save</button>
-        <a class="button secondary" href="/status-reports/{{ report.id }}/view">Cancel</a>
-      </div>
-    </form>
-  </div>
-</details>
 
 <section class="panel">
   <h2>Suggested Health</h2>

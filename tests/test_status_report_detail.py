@@ -61,13 +61,11 @@ def test_status_report_detail_links_back_to_program(client) -> None:
     assert f"/programs/{prog['id']}/view" in resp.text
 
 
-def test_status_report_detail_has_edit_form(client) -> None:
+def test_status_report_detail_has_no_standalone_edit_form(client) -> None:
     _, report = _make_program_with_report(client)
     resp = client.get(f"/status-reports/{report['id']}/view")
     assert resp.status_code == 200
-    assert f"/status-reports/{report['id']}/update" in resp.text
-    assert 'name="return_to"' in resp.text
-    assert 'value="detail"' in resp.text
+    assert 'id="edit-report"' not in resp.text
 
 
 def test_status_report_detail_divergence_shown(client) -> None:
@@ -204,10 +202,13 @@ def test_status_report_detail_shows_operational_context_sections(client) -> None
     resp = client.get(f"/status-reports/{report['id']}/view")
     assert resp.status_code == 200
     assert "Operational Context" in resp.text
-    assert "Risks" in resp.text
-    assert "Work Items" in resp.text
-    assert "Dependencies" in resp.text
     assert "Milestones" in resp.text
+    assert "Requirements" in resp.text
+    assert "Features" in resp.text
+    assert "Dependencies" in resp.text
+    assert "Risks" in resp.text
+    assert "Open Decisions" in resp.text
+    assert "Work Items" not in resp.text
 
 
 def test_status_report_detail_shows_active_risk(client) -> None:
