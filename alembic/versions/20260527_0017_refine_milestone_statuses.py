@@ -6,7 +6,8 @@ Create Date: 2026-05-27
 
 Replaces milestone status vocabulary: removes 'in_progress' and 'missed',
 adds 'on_track', 'at_risk', 'off_track', 'blocked'. Removes the owner
-column. Existing data is backfilled before the schema change:
+column. Backfill is embedded in the INSERT CASE expression so the old
+table (still constrained to old values) is only ever read, never written:
   in_progress → on_track
   missed      → off_track
 Table recreation is required because SQLite cannot ALTER CHECK constraints.
@@ -25,11 +26,9 @@ _OLD_STATUSES = "'planned', 'in_progress', 'achieved', 'missed', 'cancelled'"
 
 
 def upgrade() -> None:
-    # 1. Backfill before schema change so the new constraint is never violated.
-    op.execute(sa.text("UPDATE milestones SET status = 'on_track'  WHERE status = 'in_progress'"))
-    op.execute(sa.text("UPDATE milestones SET status = 'off_track' WHERE status = 'missed'"))
-
-    # 2. Recreate milestones without owner column and with expanded status constraint.
+    # Recreate milestones without owner column and with expanded status constraint.
+    # Backfill is embedded in the CASE expression: the old table is only ever read,
+    # never written, so the old CHECK constraint is never violated.
     op.execute(sa.text(f"""
         CREATE TABLE _milestones_new (
             id INTEGER NOT NULL PRIMARY KEY,
@@ -47,7 +46,13 @@ def upgrade() -> None:
     op.execute(sa.text("""
         INSERT INTO _milestones_new
             (id, display_id, program_id, title, description, target_date, status, created_at, updated_at)
-        SELECT id, display_id, program_id, title, description, target_date, status, created_at, updated_at
+        SELECT id, display_id, program_id, title, description, target_date,
+            CASE status
+                WHEN 'in_progress' THEN 'on_track'
+                WHEN 'missed'      THEN 'off_track'
+                ELSE status
+            END,
+            created_at, updated_at
         FROM milestones
     """))
     op.execute(sa.text("DROP TABLE milestones"))
@@ -57,12 +62,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Map new statuses back to the closest old equivalents.
-    op.execute(sa.text("UPDATE milestones SET status = 'in_progress' WHERE status = 'on_track'"))
-    op.execute(sa.text("UPDATE milestones SET status = 'missed'      WHERE status = 'off_track'"))
-    # at_risk and blocked have no direct old equivalent; default to 'planned'.
-    op.execute(sa.text("UPDATE milestones SET status = 'planned' WHERE status IN ('at_risk', 'blocked')"))
-
+    # Recreate milestones with old status vocabulary and owner column.
+    # Reverse mapping embedded in CASE: at_risk/blocked have no old equivalent → 'planned'.
     op.execute(sa.text(f"""
         CREATE TABLE _milestones_old (
             id INTEGER NOT NULL PRIMARY KEY,
@@ -81,7 +82,15 @@ def downgrade() -> None:
     op.execute(sa.text("""
         INSERT INTO _milestones_old
             (id, display_id, program_id, title, description, target_date, status, owner, created_at, updated_at)
-        SELECT id, display_id, program_id, title, description, target_date, status, NULL, created_at, updated_at
+        SELECT id, display_id, program_id, title, description, target_date,
+            CASE status
+                WHEN 'on_track'  THEN 'in_progress'
+                WHEN 'off_track' THEN 'missed'
+                WHEN 'at_risk'   THEN 'planned'
+                WHEN 'blocked'   THEN 'planned'
+                ELSE status
+            END,
+            NULL, created_at, updated_at
         FROM milestones
     """))
     op.execute(sa.text("DROP TABLE milestones"))
