@@ -110,7 +110,6 @@
           <div class="ms-node-stem"></div>
           <a href="/programs/{{ program.id }}/view?edit_milestone_id={{ ms.id }}&return_to={{ _rt }}"
              class="ms-node-card ms-card-{{ ms.status }}">
-            <span class="display-id" style="font-size:10px;">{{ ms.display_id }}</span>
             <div class="ms-card-title">{{ ms.title | truncate(28, True, '…') }}</div>
             <div class="ms-card-date">{{ ms.target_date | format_date if ms.target_date else "No date" }}</div>
             <div style="margin-top:4px;"><span class="pill" style="font-size:10px;padding:1px 5px;">{{ ms.status | replace('_', ' ') | title }}</span></div>
