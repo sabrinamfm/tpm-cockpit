@@ -522,6 +522,7 @@ def program_detail(
     edit_feature_id: Optional[int] = None,
     show_new_relationship: Optional[str] = None,
     relationship_error: Optional[str] = None,
+    return_to: str = "",
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     program = db.scalars(
@@ -843,6 +844,7 @@ def program_detail(
             "all_program_objects": all_program_objects,
             "show_new_relationship": show_new_relationship,
             "relationship_error": relationship_error,
+            "return_to": return_to,
             "today": date.today(),
         },
     )
@@ -1054,6 +1056,9 @@ async def update_dependency_from_ui(
         db.add(dependency)
         db.commit()
 
+    return_to = parsed.get("return_to", "")
+    if return_to and return_to.startswith("/"):
+        return RedirectResponse(return_to, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{dependency.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -1184,6 +1189,9 @@ async def update_risk_from_ui(
         db.add(risk)
         db.commit()
 
+    return_to = parsed.get("return_to", "")
+    if return_to and return_to.startswith("/"):
+        return RedirectResponse(return_to, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{risk.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -1259,12 +1267,18 @@ def view_status_report(
         .where(Program.id == report.program_id)
     ).one_or_none()
 
+    milestones_sorted = sorted(
+        program.milestones,
+        key=lambda ms: (ms.target_date is None, ms.target_date),
+    )
+
     return templates.TemplateResponse(
         request,
         "status_report_detail.html",
         {
             "report": report,
             "program": program,
+            "milestones_sorted": milestones_sorted,
             "HEALTH_STATE_CSS": HEALTH_STATE_CSS,
             "STATUS_REPORT_HEALTHS": STATUS_REPORT_HEALTHS,
         },
@@ -1454,6 +1468,9 @@ async def update_milestone_from_ui(
         milestone.status = milestone_status
         db.add(milestone)
         db.commit()
+    return_to = parsed.get("return_to", "")
+    if return_to and return_to.startswith("/"):
+        return RedirectResponse(return_to, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{milestone.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -1556,6 +1573,9 @@ async def update_decision_from_ui(
         decision.rationale = parsed.get("rationale", "").strip() or None
         db.add(decision)
         db.commit()
+    return_to = parsed.get("return_to", "")
+    if return_to and return_to.startswith("/"):
+        return RedirectResponse(return_to, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{decision.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -1662,6 +1682,9 @@ async def update_requirement_from_ui(
         requirement.link = parsed.get("link", "").strip() or None
         db.add(requirement)
         db.commit()
+    return_to = parsed.get("return_to", "")
+    if return_to and return_to.startswith("/"):
+        return RedirectResponse(return_to, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{requirement.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -1764,6 +1787,9 @@ async def update_feature_from_ui(
         feature.link = parsed.get("link", "").strip() or None
         db.add(feature)
         db.commit()
+    return_to = parsed.get("return_to", "")
+    if return_to and return_to.startswith("/"):
+        return RedirectResponse(return_to, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{feature.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 

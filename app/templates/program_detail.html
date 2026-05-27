@@ -170,6 +170,7 @@
     <summary class="button secondary">Edit Milestone</summary>
     <div class="collapsible-body">
       <form method="post" action="/milestones/{{ edit_milestone.id }}/update">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
         <label for="edit-milestone-title">Title</label>
         <input id="edit-milestone-title" name="title" required maxlength="200" value="{{ edit_milestone.title }}">
         <label for="edit-milestone-description">Description</label>
@@ -190,7 +191,7 @@
         </div>
         <div class="actions">
           <button type="submit">Save Milestone</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          <a class="button secondary" href="{{ return_to if return_to else '/programs/' ~ program.id ~ '/view' }}">Cancel</a>
         </div>
       </form>
     </div>
@@ -293,6 +294,7 @@
     <summary class="button secondary">Edit Decision</summary>
     <div class="collapsible-body">
       <form method="post" action="/decisions/{{ edit_decision.id }}/update">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
         <label for="edit-decision-title">Title</label>
         <input id="edit-decision-title" name="title" required maxlength="200" value="{{ edit_decision.title }}">
         <label for="edit-decision-description">Description</label>
@@ -319,7 +321,7 @@
         <textarea id="edit-decision-rationale" name="rationale">{{ edit_decision.rationale or "" }}</textarea>
         <div class="actions">
           <button type="submit">Save Decision</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          <a class="button secondary" href="{{ return_to if return_to else '/programs/' ~ program.id ~ '/view' }}">Cancel</a>
         </div>
       </form>
     </div>
@@ -432,6 +434,7 @@
     <summary class="button secondary">Edit Requirement</summary>
     <div class="collapsible-body">
       <form method="post" action="/requirements/{{ edit_requirement.id }}/update">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
         <label for="edit-req-title">Title</label>
         <input id="edit-req-title" name="title" required maxlength="200" value="{{ edit_requirement.title }}">
         <label for="edit-req-description">Description</label>
@@ -466,7 +469,7 @@
         <input id="edit-req-link" name="link" type="url" maxlength="500" value="{{ edit_requirement.link or "" }}">
         <div class="actions">
           <button type="submit">Save Requirement</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          <a class="button secondary" href="{{ return_to if return_to else '/programs/' ~ program.id ~ '/view' }}">Cancel</a>
         </div>
       </form>
     </div>
@@ -606,6 +609,7 @@
     <summary class="button secondary">Edit Feature</summary>
     <div class="collapsible-body">
       <form method="post" action="/features/{{ edit_feature.id }}/update">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
         <label for="edit-feature-title">Title</label>
         <input id="edit-feature-title" name="title" required maxlength="200" value="{{ edit_feature.title }}">
         <label for="edit-feature-description">Description</label>
@@ -632,7 +636,7 @@
         <input id="edit-feature-link" name="link" type="url" maxlength="500" value="{{ edit_feature.link or "" }}">
         <div class="actions">
           <button type="submit">Save Feature</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          <a class="button secondary" href="{{ return_to if return_to else '/programs/' ~ program.id ~ '/view' }}">Cancel</a>
         </div>
       </form>
     </div>
@@ -1037,6 +1041,7 @@
     <summary class="button secondary">Edit Dependency</summary>
     <div class="collapsible-body">
       <form method="post" action="/dependencies/{{ edit_dependency.id }}/update">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
         <label for="edit-dependency-title">Title</label>
         <input id="edit-dependency-title" name="title" required maxlength="200" value="{{ edit_dependency.title }}">
         <label for="edit-dependency-description">Description</label>
@@ -1087,7 +1092,7 @@
         <textarea id="edit-dependency-notes" name="notes">{{ edit_dependency.notes or "" }}</textarea>
         <div class="actions">
           <button type="submit">Save Dependency</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          <a class="button secondary" href="{{ return_to if return_to else '/programs/' ~ program.id ~ '/view' }}">Cancel</a>
         </div>
       </form>
     </div>
@@ -1265,6 +1270,7 @@
     <summary class="button secondary">Edit Risk</summary>
     <div class="collapsible-body">
       <form method="post" action="/risks/{{ edit_risk.id }}/update">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
         <label for="edit-risk-title">Title</label>
         <input id="edit-risk-title" name="title" required maxlength="200" value="{{ edit_risk.title }}">
         <label for="edit-risk-description">Description</label>
@@ -1307,7 +1313,7 @@
         <textarea id="edit-risk-mitigation" name="mitigation">{{ edit_risk.mitigation or "" }}</textarea>
         <div class="actions">
           <button type="submit">Save Risk</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          <a class="button secondary" href="{{ return_to if return_to else '/programs/' ~ program.id ~ '/view' }}">Cancel</a>
         </div>
       </form>
     </div>

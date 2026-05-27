@@ -225,3 +225,193 @@ def test_status_report_detail_does_not_show_resolved_risk(client) -> None:
     resp = client.get(f"/status-reports/{report['id']}/view")
     assert resp.status_code == 200
     assert "Old risk" not in resp.text
+
+
+# ── Edit links in operational context ────────────────────────────────────────
+
+def _report_edit_url(prog_id, item_type, item_id, report_id):
+    return f"/programs/{prog_id}/view?edit_{item_type}_id={item_id}&return_to=/status-reports/{report_id}/view"
+
+
+def test_status_report_detail_edit_link_milestone(client) -> None:
+    prog, report = _make_program_with_report(client)
+    ms = client.post(f"/programs/{prog['id']}/milestones", json={"title": "M1", "status": "on_track"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert _report_edit_url(prog["id"], "milestone", ms["id"], report["id"]) in resp.text
+
+
+def test_status_report_detail_edit_link_requirement(client) -> None:
+    prog, report = _make_program_with_report(client)
+    req = client.post(f"/programs/{prog['id']}/requirements", json={"title": "R1", "status": "in_progress"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert _report_edit_url(prog["id"], "requirement", req["id"], report["id"]) in resp.text
+
+
+def test_status_report_detail_edit_link_feature(client) -> None:
+    prog, report = _make_program_with_report(client)
+    ft = client.post(f"/programs/{prog['id']}/features", json={"title": "F1", "status": "in_progress"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert _report_edit_url(prog["id"], "feature", ft["id"], report["id"]) in resp.text
+
+
+def test_status_report_detail_edit_link_dependency(client) -> None:
+    prog, report = _make_program_with_report(client)
+    dep = client.post(f"/programs/{prog['id']}/dependencies", json={"title": "D1", "status": "blocked", "blocking_level": "high"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert _report_edit_url(prog["id"], "dependency", dep["id"], report["id"]) in resp.text
+
+
+def test_status_report_detail_edit_link_risk(client) -> None:
+    prog, report = _make_program_with_report(client)
+    risk = client.post(f"/programs/{prog['id']}/risks", json={"title": "Risk1", "status": "open"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert _report_edit_url(prog["id"], "risk", risk["id"], report["id"]) in resp.text
+
+
+def test_status_report_detail_edit_link_decision(client) -> None:
+    prog, report = _make_program_with_report(client)
+    dec = client.post(f"/programs/{prog['id']}/decisions", json={"title": "Dec1", "status": "proposed"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert _report_edit_url(prog["id"], "decision", dec["id"], report["id"]) in resp.text
+
+
+# ── return_to redirects after editing operational context items ───────────────
+
+def test_update_milestone_returns_to_report(client) -> None:
+    prog, report = _make_program_with_report(client)
+    ms = client.post(f"/programs/{prog['id']}/milestones", json={"title": "M1", "status": "on_track"}).json()
+    resp = client.post(
+        f"/milestones/{ms['id']}/update",
+        data={"title": "M1 Updated", "status": "achieved", "return_to": f"/status-reports/{report['id']}/view"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/status-reports/{report['id']}/view"
+
+
+def test_update_requirement_returns_to_report(client) -> None:
+    prog, report = _make_program_with_report(client)
+    req = client.post(f"/programs/{prog['id']}/requirements", json={"title": "R1"}).json()
+    resp = client.post(
+        f"/requirements/{req['id']}/update",
+        data={"title": "R1 Updated", "status": "delivered", "source_type": "okr",
+              "return_to": f"/status-reports/{report['id']}/view"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/status-reports/{report['id']}/view"
+
+
+def test_update_feature_returns_to_report(client) -> None:
+    prog, report = _make_program_with_report(client)
+    ft = client.post(f"/programs/{prog['id']}/features", json={"title": "F1"}).json()
+    resp = client.post(
+        f"/features/{ft['id']}/update",
+        data={"title": "F1 Updated", "status": "delivered",
+              "return_to": f"/status-reports/{report['id']}/view"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/status-reports/{report['id']}/view"
+
+
+def test_update_dependency_returns_to_report(client) -> None:
+    prog, report = _make_program_with_report(client)
+    dep = client.post(f"/programs/{prog['id']}/dependencies", json={"title": "D1", "blocking_level": "medium"}).json()
+    resp = client.post(
+        f"/dependencies/{dep['id']}/update",
+        data={"title": "D1 Updated", "status": "resolved", "blocking_level": "medium",
+              "dependency_type": dep["dependency_type"],
+              "return_to": f"/status-reports/{report['id']}/view"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/status-reports/{report['id']}/view"
+
+
+def test_update_risk_returns_to_report(client) -> None:
+    prog, report = _make_program_with_report(client)
+    risk = client.post(f"/programs/{prog['id']}/risks", json={"title": "Risk1"}).json()
+    resp = client.post(
+        f"/risks/{risk['id']}/update",
+        data={"title": "Risk1 Updated", "status": "mitigated",
+              "severity": risk["severity"], "likelihood": risk["likelihood"],
+              "return_to": f"/status-reports/{report['id']}/view"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/status-reports/{report['id']}/view"
+
+
+def test_update_decision_returns_to_report(client) -> None:
+    prog, report = _make_program_with_report(client)
+    dec = client.post(f"/programs/{prog['id']}/decisions", json={"title": "Dec1"}).json()
+    resp = client.post(
+        f"/decisions/{dec['id']}/update",
+        data={"title": "Dec1 Updated", "status": "decided",
+              "return_to": f"/status-reports/{report['id']}/view"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/status-reports/{report['id']}/view"
+
+
+# ── Program detail edit still redirects to program when no return_to ─────────
+
+def test_update_milestone_without_return_to_stays_on_program(client) -> None:
+    prog = client.post("/programs", json={"name": "P"}).json()
+    ms = client.post(f"/programs/{prog['id']}/milestones", json={"title": "M1", "status": "on_track"}).json()
+    resp = client.post(
+        f"/milestones/{ms['id']}/update",
+        data={"title": "M1 Updated", "status": "achieved"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/programs/{prog['id']}/view"
+
+# ── Milestone timeline ────────────────────────────────────────────────────────
+
+def test_milestone_timeline_renders(client) -> None:
+    prog, report = _make_program_with_report(client)
+    client.post(f"/programs/{prog['id']}/milestones", json={"title": "Launch", "status": "on_track", "target_date": "2026-09-01"})
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert resp.status_code == 200
+    assert "ms-timeline" in resp.text
+    assert "Launch" in resp.text
+
+
+def test_milestone_timeline_shows_all_statuses(client) -> None:
+    prog, report = _make_program_with_report(client)
+    for title, status in [("Planned MS", "planned"), ("Achieved MS", "achieved"), ("Cancelled MS", "cancelled")]:
+        client.post(f"/programs/{prog['id']}/milestones", json={"title": title, "status": status})
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert resp.status_code == 200
+    assert "Planned MS" in resp.text
+    assert "Achieved MS" in resp.text
+    assert "Cancelled MS" in resp.text
+
+
+def test_milestone_timeline_card_links_to_edit(client) -> None:
+    prog, report = _make_program_with_report(client)
+    ms = client.post(f"/programs/{prog['id']}/milestones", json={"title": "M1", "status": "on_track"}).json()
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert f"edit_milestone_id={ms['id']}" in resp.text
+    assert f"return_to=/status-reports/{report['id']}/view" in resp.text
+
+
+def test_milestone_timeline_chronological_order(client) -> None:
+    prog, report = _make_program_with_report(client)
+    client.post(f"/programs/{prog['id']}/milestones", json={"title": "Later", "status": "planned", "target_date": "2026-12-01"})
+    client.post(f"/programs/{prog['id']}/milestones", json={"title": "Earlier", "status": "planned", "target_date": "2026-07-01"})
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert resp.status_code == 200
+    earlier_pos = resp.text.index("Earlier")
+    later_pos = resp.text.index("Later")
+    assert earlier_pos < later_pos
+
+
+def test_milestone_timeline_empty_state(client) -> None:
+    _, report = _make_program_with_report(client)
+    resp = client.get(f"/status-reports/{report['id']}/view")
+    assert resp.status_code == 200
+    assert "No milestones yet." in resp.text
