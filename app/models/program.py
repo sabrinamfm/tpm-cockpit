@@ -8,6 +8,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.decision import Decision
+    from app.models.feature import Feature
     from app.models.milestone import Milestone
     from app.models.program_status import ProgramStatus
     from app.models.requirement import Requirement
@@ -74,6 +75,11 @@ class Program(Base):
     )
     requirements: Mapped[list["Requirement"]] = relationship(
         "Requirement",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
+    features: Mapped[list["Feature"]] = relationship(
+        "Feature",
         back_populates="program",
         cascade="all, delete-orphan",
     )

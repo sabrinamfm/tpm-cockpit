@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-_OBJECT_TYPES_SQL = "'work_item', 'dependency', 'risk', 'status_report', 'milestone', 'decision', 'requirement'"
+_OBJECT_TYPES_SQL = "'work_item', 'dependency', 'risk', 'status_report', 'milestone', 'decision', 'requirement', 'feature'"
 _REL_TYPES_SQL = (
     "'relates_to', 'blocks', 'blocked_by', 'mitigates', "
     "'tracks', 'highlights', 'duplicates', 'depends_on'"

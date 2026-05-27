@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Decision, Dependency, Milestone, Program, Requirement, Risk, WorkItem
+from app.models import Decision, Dependency, Feature, Milestone, Program, Requirement, Risk, WorkItem
 from app.models.relationship import Relationship
 from app.models.status_report import StatusReport
 from app.schemas.relationship import RelationshipCreate, RelationshipRead
@@ -20,6 +20,7 @@ _OBJECT_MODEL_MAP = {
     "milestone": Milestone,
     "decision": Decision,
     "requirement": Requirement,
+    "feature": Feature,
 }
 
 
@@ -77,6 +78,7 @@ def list_program_relationships(
     ms_ids = list(db.scalars(select(Milestone.id).where(Milestone.program_id == program_id)))
     dec_ids = list(db.scalars(select(Decision.id).where(Decision.program_id == program_id)))
     req_ids = list(db.scalars(select(Requirement.id).where(Requirement.program_id == program_id)))
+    ft_ids = list(db.scalars(select(Feature.id).where(Feature.program_id == program_id)))
 
     conditions = []
     for type_name, ids in [
@@ -87,6 +89,7 @@ def list_program_relationships(
         ("milestone", ms_ids),
         ("decision", dec_ids),
         ("requirement", req_ids),
+        ("feature", ft_ids),
     ]:
         if ids:
             conditions.extend([

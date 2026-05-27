@@ -24,7 +24,7 @@ from app.domain.queries import (
     get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Decision, Dependency, Milestone, Program, ProgramStatus, Relationship, Requirement, Risk, SourceType, StatusReport, WorkItem
+from app.models import Decision, Dependency, Feature, Milestone, Program, ProgramStatus, Relationship, Requirement, Risk, SourceType, StatusReport, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -108,6 +108,16 @@ REQUIREMENT_SORT_LABELS = {
     "source_type": "Source Type",
     "status": "Status",
 }
+FEATURE_STATUSES = ("proposed", "planned", "in_progress", "blocked", "delivered", "deferred", "cancelled")
+FEATURE_STATUS_RANK = {
+    "blocked": 0, "in_progress": 1, "proposed": 2, "planned": 3,
+    "deferred": 4, "delivered": 5, "cancelled": 6,
+}
+FEATURE_SORT_LABELS = {
+    "target_date": "Target Date",
+    "status": "Status",
+    "owner": "Owner",
+}
 RELATIONSHIP_TYPES = (
     "relates_to",
     "blocks",
@@ -126,6 +136,7 @@ _RELATIONSHIP_OBJECT_MODEL_MAP = {
     "milestone": Milestone,
     "decision": Decision,
     "requirement": Requirement,
+    "feature": Feature,
 }
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -181,6 +192,8 @@ templates.env.globals.update(
         "REQUIREMENT_SOURCE_TYPES": REQUIREMENT_SOURCE_TYPES,
         "REQUIREMENT_STATUSES": REQUIREMENT_STATUSES,
         "REQUIREMENT_SORT_LABELS": REQUIREMENT_SORT_LABELS,
+        "FEATURE_STATUSES": FEATURE_STATUSES,
+        "FEATURE_SORT_LABELS": FEATURE_SORT_LABELS,
     }
 )
 templates.env.filters.update(
@@ -418,6 +431,16 @@ def _risk_sort_key(risk: Risk, sort: str):
     return (risk.updated_at, risk.id)
 
 
+def _feature_sort_key(feature: Feature, sort: str):
+    if sort == "target_date":
+        return (feature.target_date or date.max, feature.id)
+    if sort == "status":
+        return (FEATURE_STATUS_RANK.get(feature.status, 99), feature.id)
+    if sort == "owner":
+        return (feature.owner or "", feature.id)
+    return (feature.target_date or date.max, feature.id)
+
+
 def _requirement_sort_key(req: Requirement, sort: str):
     if sort == "target_date":
         return (req.target_date or date.max, req.id)
@@ -491,6 +514,12 @@ def program_detail(
     show_new_requirement: Optional[str] = None,
     requirement_error: Optional[str] = None,
     edit_requirement_id: Optional[int] = None,
+    feature_status_filter: Optional[str] = None,
+    feature_owner_filter: Optional[str] = None,
+    feature_sort: str = "target_date",
+    show_new_feature: Optional[str] = None,
+    feature_error: Optional[str] = None,
+    edit_feature_id: Optional[int] = None,
     show_new_relationship: Optional[str] = None,
     relationship_error: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -505,6 +534,7 @@ def program_detail(
             selectinload(Program.milestones),
             selectinload(Program.decisions),
             selectinload(Program.requirements),
+            selectinload(Program.features),
         )
         .where(Program.id == program_id)
     ).one_or_none()
@@ -548,6 +578,10 @@ def program_detail(
         req_status_filter = None
     if requirement_sort not in REQUIREMENT_SORT_LABELS:
         requirement_sort = "target_date"
+    if feature_status_filter and feature_status_filter not in FEATURE_STATUSES:
+        feature_status_filter = None
+    if feature_sort not in FEATURE_SORT_LABELS:
+        feature_sort = "target_date"
 
     work_items = list(program.work_items)
     if work_status_filter:
@@ -660,6 +694,17 @@ def program_detail(
         edit_requirement = next((r for r in program.requirements if r.id == edit_requirement_id), None)
     req_owners = sorted({r.owner for r in program.requirements if r.owner})
 
+    features = list(program.features)
+    if feature_status_filter:
+        features = [f for f in features if f.status == feature_status_filter]
+    if feature_owner_filter:
+        features = [f for f in features if f.owner == feature_owner_filter]
+    features = sorted(features, key=lambda f: _feature_sort_key(f, feature_sort))
+    edit_feature = None
+    if edit_feature_id is not None:
+        edit_feature = next((f for f in program.features if f.id == edit_feature_id), None)
+    feature_owners = sorted({f.owner for f in program.features if f.owner})
+
     # Build lookup and load relationships for all objects in this program
     rel_object_lookup: dict[str, dict] = {}
     all_program_objects: list[dict] = []
@@ -691,6 +736,10 @@ def program_detail(
         info = {"type": "requirement", "id": req.id, "display_id": req.display_id, "title": req.title}
         rel_object_lookup[f"requirement:{req.id}"] = info
         all_program_objects.append(info)
+    for ft in program.features:
+        info = {"type": "feature", "id": ft.id, "display_id": ft.display_id, "title": ft.title}
+        rel_object_lookup[f"feature:{ft.id}"] = info
+        all_program_objects.append(info)
 
     rel_conditions = []
     for type_name, ids in [
@@ -701,6 +750,7 @@ def program_detail(
         ("milestone", [ms.id for ms in program.milestones]),
         ("decision", [dec.id for dec in program.decisions]),
         ("requirement", [req.id for req in program.requirements]),
+        ("feature", [ft.id for ft in program.features]),
     ]:
         if ids:
             rel_conditions.extend([
@@ -780,6 +830,14 @@ def program_detail(
             "requirement_error": requirement_error,
             "edit_requirement": edit_requirement,
             "req_owners": req_owners,
+            "features": features,
+            "feature_status_filter": feature_status_filter,
+            "feature_owner_filter": feature_owner_filter,
+            "feature_sort": feature_sort,
+            "show_new_feature": show_new_feature,
+            "feature_error": feature_error,
+            "edit_feature": edit_feature,
+            "feature_owners": feature_owners,
             "relationships": relationships,
             "rel_object_lookup": rel_object_lookup,
             "all_program_objects": all_program_objects,
@@ -1582,6 +1640,108 @@ def delete_requirement_from_ui(requirement_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
     program_id = requirement.program_id
     db.delete(requirement)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Feature UI handlers ───────────────────────────────────────────────────────
+
+@router.post("/programs/{program_id}/features/create", include_in_schema=False)
+async def create_feature_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    feature_status = parsed.get("status", "proposed")
+    if not title or feature_status not in FEATURE_STATUSES:
+        query = urlencode({"show_new_feature": "1", "feature_error": "Title and status are required."})
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-feature",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    db.add(Feature(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        status=feature_status,
+        owner=parsed.get("owner", "").strip() or None,
+        target_date=_parse_due_date(parsed.get("target_date", "")),
+        link=parsed.get("link", "").strip() or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/features/{feature_id}/update", include_in_schema=False)
+async def update_feature_from_ui(
+    feature_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    feature = db.get(Feature, feature_id)
+    if feature is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    feature_status = parsed.get("status", feature.status)
+    if title and feature_status in FEATURE_STATUSES:
+        feature.title = title
+        feature.description = parsed.get("description", "").strip() or None
+        feature.status = feature_status
+        feature.owner = parsed.get("owner", "").strip() or None
+        feature.target_date = _parse_due_date(parsed.get("target_date", ""))
+        feature.link = parsed.get("link", "").strip() or None
+        db.add(feature)
+        db.commit()
+    return RedirectResponse(f"/programs/{feature.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/features/{feature_id}/deliver-ui", include_in_schema=False)
+def deliver_feature_from_ui(feature_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    feature = db.get(Feature, feature_id)
+    if feature is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found")
+    feature.status = "delivered"
+    db.add(feature)
+    db.commit()
+    return RedirectResponse(f"/programs/{feature.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/features/{feature_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_feature_page(
+    request: Request, feature_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    feature = db.get(Feature, feature_id)
+    if feature is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found")
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "page_title": "Delete Feature?",
+            "subtitle": feature.title,
+            "back_url": f"/programs/{feature.program_id}/view",
+            "back_label": "Back to Program",
+            "message": "This removes the Feature from the Program.",
+            "action_url": f"/features/{feature.id}/delete",
+            "cancel_url": f"/programs/{feature.program_id}/view",
+        },
+    )
+
+
+@router.post("/features/{feature_id}/delete", include_in_schema=False)
+def delete_feature_from_ui(feature_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    feature = db.get(Feature, feature_id)
+    if feature is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found")
+    program_id = feature.program_id
+    db.delete(feature)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 

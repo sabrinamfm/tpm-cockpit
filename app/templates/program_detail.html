@@ -567,6 +567,161 @@
 </section>
 
 <section class="panel">
+  <h2>Features</h2>
+
+  <details id="new-feature" class="collapsible-panel"{% if show_new_feature == "1" or feature_error %} open{% endif %}>
+    <summary class="button">New Feature</summary>
+    <div class="collapsible-body">
+      {% if feature_error %}<div class="error">{{ feature_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/features/create">
+        <label for="feature-title">Title</label>
+        <input id="feature-title" name="title" required maxlength="200">
+        <label for="feature-description">Description</label>
+        <textarea id="feature-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="feature-status">Status</label>
+            <select id="feature-status" name="status">
+              {% for fs in FEATURE_STATUSES %}
+                <option value="{{ fs }}"{% if fs == "proposed" %} selected{% endif %}>{{ fs | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="feature-owner">Owner</label>
+            <input id="feature-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="feature-target-date">Target Date</label>
+            <input id="feature-target-date" name="target_date" type="date">
+          </div>
+        </div>
+        <label for="feature-link">Link</label>
+        <input id="feature-link" name="link" type="url" maxlength="500" placeholder="https://…">
+        <div class="actions">
+          <button type="submit">Create Feature</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_feature %}
+  <details id="edit-feature" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Feature</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/features/{{ edit_feature.id }}/update">
+        <label for="edit-feature-title">Title</label>
+        <input id="edit-feature-title" name="title" required maxlength="200" value="{{ edit_feature.title }}">
+        <label for="edit-feature-description">Description</label>
+        <textarea id="edit-feature-description" name="description">{{ edit_feature.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-feature-status">Status</label>
+            <select id="edit-feature-status" name="status">
+              {% for fs in FEATURE_STATUSES %}
+                <option value="{{ fs }}"{% if fs == edit_feature.status %} selected{% endif %}>{{ fs | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-feature-owner">Owner</label>
+            <input id="edit-feature-owner" name="owner" maxlength="120" value="{{ edit_feature.owner or "" }}">
+          </div>
+          <div>
+            <label for="edit-feature-target-date">Target Date</label>
+            <input id="edit-feature-target-date" name="target_date" type="date" value="{{ edit_feature.target_date | format_date }}">
+          </div>
+        </div>
+        <label for="edit-feature-link">Link</label>
+        <input id="edit-feature-link" name="link" type="url" maxlength="500" value="{{ edit_feature.link or "" }}">
+        <div class="actions">
+          <button type="submit">Save Feature</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="feature_status_filter">Status</label>
+      <select id="feature_status_filter" name="feature_status_filter">
+        <option value="">All statuses</option>
+        {% for fs in FEATURE_STATUSES %}
+          <option value="{{ fs }}"{% if fs == feature_status_filter %} selected{% endif %}>{{ fs | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="feature_owner_filter">Owner</label>
+      <select id="feature_owner_filter" name="feature_owner_filter">
+        <option value="">All owners</option>
+        {% for owner in feature_owners %}
+          <option value="{{ owner }}"{% if owner == feature_owner_filter %} selected{% endif %}>{{ owner }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="feature_sort">Sort</label>
+      <select id="feature_sort" name="feature_sort">
+        {% for value, label in FEATURE_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == feature_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Owner</th>
+        <th>Target Date</th>
+        <th>Link</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for feature in features %}
+        <tr>
+          <td>{% if feature.display_id %}<span class="display-id">{{ feature.display_id }}</span>{% endif %}{{ feature.title }}</td>
+          <td><span class="pill">{{ feature.status | replace('_', ' ') | title }}</span></td>
+          <td>{{ feature.owner or "" }}</td>
+          <td>{{ feature.target_date | format_date }}</td>
+          <td>
+            {% if feature.link %}
+              <a href="{{ feature.link }}" target="_blank" rel="noopener noreferrer">{{ feature.link | truncate(40, True, '…') }}</a>
+            {% endif %}
+          </td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_feature_id={{ feature.id }}#edit-feature">Edit</a>
+                <form method="post" action="/features/{{ feature.id }}/deliver-ui">
+                  <button type="submit">Mark Delivered</button>
+                </form>
+                <a href="/features/{{ feature.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="muted">No features match the current view.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <h2>Work Items</h2>
   </div>
