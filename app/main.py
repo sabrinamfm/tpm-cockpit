@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.routes.decisions import router as decisions_router
 from app.api.routes.dependencies import router as dependencies_router
+from app.api.routes.requirements import router as requirements_router
 from app.api.routes.health import router as health_router
 from app.api.routes.milestones import router as milestones_router
 from app.api.routes.program_statuses import router as program_statuses_router
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_router)
     app.include_router(decisions_router)
     app.include_router(health_router)
+    app.include_router(requirements_router)
     app.include_router(milestones_router)
     app.include_router(program_statuses_router)
     app.include_router(programs_router)

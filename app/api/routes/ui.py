@@ -24,7 +24,7 @@ from app.domain.queries import (
     get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Decision, Dependency, Milestone, Program, ProgramStatus, Relationship, Risk, SourceType, StatusReport, WorkItem
+from app.models import Decision, Dependency, Milestone, Program, ProgramStatus, Relationship, Requirement, Risk, SourceType, StatusReport, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -88,6 +88,26 @@ DECISION_SORT_LABELS = {
     "status": "Status",
     "updated_at": "Updated",
 }
+REQUIREMENT_SOURCE_TYPES = (
+    "okr",
+    "change_management",
+    "customer_commitment",
+    "compliance",
+    "leadership_request",
+    "strategic_initiative",
+    "operational_requirement",
+    "other",
+)
+REQUIREMENT_STATUSES = ("proposed", "accepted", "in_progress", "delivered", "deferred", "cancelled")
+REQUIREMENT_STATUS_RANK = {
+    "proposed": 0, "in_progress": 1, "accepted": 2,
+    "deferred": 3, "delivered": 4, "cancelled": 5,
+}
+REQUIREMENT_SORT_LABELS = {
+    "target_date": "Target Date",
+    "source_type": "Source Type",
+    "status": "Status",
+}
 RELATIONSHIP_TYPES = (
     "relates_to",
     "blocks",
@@ -105,6 +125,7 @@ _RELATIONSHIP_OBJECT_MODEL_MAP = {
     "status_report": StatusReport,
     "milestone": Milestone,
     "decision": Decision,
+    "requirement": Requirement,
 }
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -157,6 +178,9 @@ templates.env.globals.update(
         "MILESTONE_SORT_LABELS": MILESTONE_SORT_LABELS,
         "DECISION_STATUSES": DECISION_STATUSES,
         "DECISION_SORT_LABELS": DECISION_SORT_LABELS,
+        "REQUIREMENT_SOURCE_TYPES": REQUIREMENT_SOURCE_TYPES,
+        "REQUIREMENT_STATUSES": REQUIREMENT_STATUSES,
+        "REQUIREMENT_SORT_LABELS": REQUIREMENT_SORT_LABELS,
     }
 )
 templates.env.filters.update(
@@ -394,6 +418,16 @@ def _risk_sort_key(risk: Risk, sort: str):
     return (risk.updated_at, risk.id)
 
 
+def _requirement_sort_key(req: Requirement, sort: str):
+    if sort == "target_date":
+        return (req.target_date or date.max, req.id)
+    if sort == "source_type":
+        return (req.source_type, req.id)
+    if sort == "status":
+        return (REQUIREMENT_STATUS_RANK.get(req.status, 99), req.id)
+    return (req.target_date or date.max, req.id)
+
+
 def _decision_sort_key(decision: Decision, sort: str):
     if sort == "decision_date":
         return (decision.decision_date or date.max, decision.id)
@@ -450,6 +484,13 @@ def program_detail(
     show_new_decision: Optional[str] = None,
     decision_error: Optional[str] = None,
     edit_decision_id: Optional[int] = None,
+    req_source_type_filter: Optional[str] = None,
+    req_status_filter: Optional[str] = None,
+    req_owner_filter: Optional[str] = None,
+    requirement_sort: str = "target_date",
+    show_new_requirement: Optional[str] = None,
+    requirement_error: Optional[str] = None,
+    edit_requirement_id: Optional[int] = None,
     show_new_relationship: Optional[str] = None,
     relationship_error: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -463,6 +504,7 @@ def program_detail(
             selectinload(Program.status_reports),
             selectinload(Program.milestones),
             selectinload(Program.decisions),
+            selectinload(Program.requirements),
         )
         .where(Program.id == program_id)
     ).one_or_none()
@@ -500,6 +542,12 @@ def program_detail(
         milestone_sort = "target_date"
     if decision_sort not in DECISION_SORT_LABELS:
         decision_sort = "decision_date"
+    if req_source_type_filter and req_source_type_filter not in REQUIREMENT_SOURCE_TYPES:
+        req_source_type_filter = None
+    if req_status_filter and req_status_filter not in REQUIREMENT_STATUSES:
+        req_status_filter = None
+    if requirement_sort not in REQUIREMENT_SORT_LABELS:
+        requirement_sort = "target_date"
 
     work_items = list(program.work_items)
     if work_status_filter:
@@ -599,6 +647,19 @@ def program_detail(
 
     decision_owners = sorted({d.owner for d in program.decisions if d.owner})
 
+    requirements = list(program.requirements)
+    if req_source_type_filter:
+        requirements = [r for r in requirements if r.source_type == req_source_type_filter]
+    if req_status_filter:
+        requirements = [r for r in requirements if r.status == req_status_filter]
+    if req_owner_filter:
+        requirements = [r for r in requirements if r.owner == req_owner_filter]
+    requirements = sorted(requirements, key=lambda r: _requirement_sort_key(r, requirement_sort))
+    edit_requirement = None
+    if edit_requirement_id is not None:
+        edit_requirement = next((r for r in program.requirements if r.id == edit_requirement_id), None)
+    req_owners = sorted({r.owner for r in program.requirements if r.owner})
+
     # Build lookup and load relationships for all objects in this program
     rel_object_lookup: dict[str, dict] = {}
     all_program_objects: list[dict] = []
@@ -626,6 +687,10 @@ def program_detail(
         info = {"type": "decision", "id": dec.id, "display_id": dec.display_id, "title": dec.title}
         rel_object_lookup[f"decision:{dec.id}"] = info
         all_program_objects.append(info)
+    for req in program.requirements:
+        info = {"type": "requirement", "id": req.id, "display_id": req.display_id, "title": req.title}
+        rel_object_lookup[f"requirement:{req.id}"] = info
+        all_program_objects.append(info)
 
     rel_conditions = []
     for type_name, ids in [
@@ -635,6 +700,7 @@ def program_detail(
         ("status_report", [sr.id for sr in program.status_reports]),
         ("milestone", [ms.id for ms in program.milestones]),
         ("decision", [dec.id for dec in program.decisions]),
+        ("requirement", [req.id for req in program.requirements]),
     ]:
         if ids:
             rel_conditions.extend([
@@ -705,6 +771,15 @@ def program_detail(
             "decision_error": decision_error,
             "edit_decision": edit_decision,
             "decision_owners": decision_owners,
+            "requirements": requirements,
+            "req_source_type_filter": req_source_type_filter,
+            "req_status_filter": req_status_filter,
+            "req_owner_filter": req_owner_filter,
+            "requirement_sort": requirement_sort,
+            "show_new_requirement": show_new_requirement,
+            "requirement_error": requirement_error,
+            "edit_requirement": edit_requirement,
+            "req_owners": req_owners,
             "relationships": relationships,
             "rel_object_lookup": rel_object_lookup,
             "all_program_objects": all_program_objects,
@@ -1401,6 +1476,112 @@ def delete_decision_from_ui(decision_id: int, db: Session = Depends(get_db)) -> 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
     program_id = decision.program_id
     db.delete(decision)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Requirement UI handlers ───────────────────────────────────────────────────
+
+@router.post("/programs/{program_id}/requirements/create", include_in_schema=False)
+async def create_requirement_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    req_source_type = parsed.get("source_type", "other")
+    req_status = parsed.get("status", "proposed")
+    if not title or req_source_type not in REQUIREMENT_SOURCE_TYPES or req_status not in REQUIREMENT_STATUSES:
+        query = urlencode({"show_new_requirement": "1", "requirement_error": "Title, source type, and status are required."})
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-requirement",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    db.add(Requirement(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        source_type=req_source_type,
+        status=req_status,
+        owner=parsed.get("owner", "").strip() or None,
+        target_date=_parse_due_date(parsed.get("target_date", "")),
+        link=parsed.get("link", "").strip() or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/requirements/{requirement_id}/update", include_in_schema=False)
+async def update_requirement_from_ui(
+    requirement_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    requirement = db.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    req_source_type = parsed.get("source_type", requirement.source_type)
+    req_status = parsed.get("status", requirement.status)
+    if title and req_source_type in REQUIREMENT_SOURCE_TYPES and req_status in REQUIREMENT_STATUSES:
+        requirement.title = title
+        requirement.description = parsed.get("description", "").strip() or None
+        requirement.source_type = req_source_type
+        requirement.status = req_status
+        requirement.owner = parsed.get("owner", "").strip() or None
+        requirement.target_date = _parse_due_date(parsed.get("target_date", ""))
+        requirement.link = parsed.get("link", "").strip() or None
+        db.add(requirement)
+        db.commit()
+    return RedirectResponse(f"/programs/{requirement.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/requirements/{requirement_id}/deliver-ui", include_in_schema=False)
+def deliver_requirement_from_ui(requirement_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    requirement = db.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+    requirement.status = "delivered"
+    db.add(requirement)
+    db.commit()
+    return RedirectResponse(f"/programs/{requirement.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/requirements/{requirement_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_requirement_page(
+    request: Request, requirement_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    requirement = db.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "page_title": "Delete Requirement?",
+            "subtitle": requirement.title,
+            "back_url": f"/programs/{requirement.program_id}/view",
+            "back_label": "Back to Program",
+            "message": "This removes the Requirement from the Program.",
+            "action_url": f"/requirements/{requirement.id}/delete",
+            "cancel_url": f"/programs/{requirement.program_id}/view",
+        },
+    )
+
+
+@router.post("/requirements/{requirement_id}/delete", include_in_schema=False)
+def delete_requirement_from_ui(requirement_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    requirement = db.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+    program_id = requirement.program_id
+    db.delete(requirement)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 

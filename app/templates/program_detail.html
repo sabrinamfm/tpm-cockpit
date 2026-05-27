@@ -385,6 +385,188 @@
 </section>
 
 <section class="panel">
+  <h2>Requirements</h2>
+
+  <details id="new-requirement" class="collapsible-panel"{% if show_new_requirement == "1" or requirement_error %} open{% endif %}>
+    <summary class="button">New Requirement</summary>
+    <div class="collapsible-body">
+      {% if requirement_error %}<div class="error">{{ requirement_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/requirements/create">
+        <label for="req-title">Title</label>
+        <input id="req-title" name="title" required maxlength="200">
+        <label for="req-description">Description</label>
+        <textarea id="req-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="req-source-type">Source Type</label>
+            <select id="req-source-type" name="source_type">
+              {% for rst in REQUIREMENT_SOURCE_TYPES %}
+                <option value="{{ rst }}"{% if rst == "other" %} selected{% endif %}>{{ rst | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="req-status">Status</label>
+            <select id="req-status" name="status">
+              {% for rs in REQUIREMENT_STATUSES %}
+                <option value="{{ rs }}"{% if rs == "proposed" %} selected{% endif %}>{{ rs | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="req-owner">Owner</label>
+            <input id="req-owner" name="owner" maxlength="120">
+          </div>
+          <div>
+            <label for="req-target-date">Target Date</label>
+            <input id="req-target-date" name="target_date" type="date">
+          </div>
+        </div>
+        <label for="req-link">Link</label>
+        <input id="req-link" name="link" type="url" maxlength="500" placeholder="https://…">
+        <div class="actions">
+          <button type="submit">Create Requirement</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_requirement %}
+  <details id="edit-requirement" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Requirement</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/requirements/{{ edit_requirement.id }}/update">
+        <label for="edit-req-title">Title</label>
+        <input id="edit-req-title" name="title" required maxlength="200" value="{{ edit_requirement.title }}">
+        <label for="edit-req-description">Description</label>
+        <textarea id="edit-req-description" name="description">{{ edit_requirement.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-req-source-type">Source Type</label>
+            <select id="edit-req-source-type" name="source_type">
+              {% for rst in REQUIREMENT_SOURCE_TYPES %}
+                <option value="{{ rst }}"{% if rst == edit_requirement.source_type %} selected{% endif %}>{{ rst | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-req-status">Status</label>
+            <select id="edit-req-status" name="status">
+              {% for rs in REQUIREMENT_STATUSES %}
+                <option value="{{ rs }}"{% if rs == edit_requirement.status %} selected{% endif %}>{{ rs | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-req-owner">Owner</label>
+            <input id="edit-req-owner" name="owner" maxlength="120" value="{{ edit_requirement.owner or "" }}">
+          </div>
+          <div>
+            <label for="edit-req-target-date">Target Date</label>
+            <input id="edit-req-target-date" name="target_date" type="date" value="{{ edit_requirement.target_date | format_date }}">
+          </div>
+        </div>
+        <label for="edit-req-link">Link</label>
+        <input id="edit-req-link" name="link" type="url" maxlength="500" value="{{ edit_requirement.link or "" }}">
+        <div class="actions">
+          <button type="submit">Save Requirement</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="req_source_type_filter">Source Type</label>
+      <select id="req_source_type_filter" name="req_source_type_filter">
+        <option value="">All types</option>
+        {% for rst in REQUIREMENT_SOURCE_TYPES %}
+          <option value="{{ rst }}"{% if rst == req_source_type_filter %} selected{% endif %}>{{ rst | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="req_status_filter">Status</label>
+      <select id="req_status_filter" name="req_status_filter">
+        <option value="">All statuses</option>
+        {% for rs in REQUIREMENT_STATUSES %}
+          <option value="{{ rs }}"{% if rs == req_status_filter %} selected{% endif %}>{{ rs | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="req_owner_filter">Owner</label>
+      <select id="req_owner_filter" name="req_owner_filter">
+        <option value="">All owners</option>
+        {% for owner in req_owners %}
+          <option value="{{ owner }}"{% if owner == req_owner_filter %} selected{% endif %}>{{ owner }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="requirement_sort">Sort</label>
+      <select id="requirement_sort" name="requirement_sort">
+        {% for value, label in REQUIREMENT_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == requirement_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Source Type</th>
+        <th>Status</th>
+        <th>Owner</th>
+        <th>Target Date</th>
+        <th>Link</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for req in requirements %}
+        <tr>
+          <td>{% if req.display_id %}<span class="display-id">{{ req.display_id }}</span>{% endif %}{{ req.title }}</td>
+          <td>{{ req.source_type | replace('_', ' ') | title }}</td>
+          <td><span class="pill">{{ req.status | replace('_', ' ') | title }}</span></td>
+          <td>{{ req.owner or "" }}</td>
+          <td>{{ req.target_date | format_date }}</td>
+          <td>
+            {% if req.link %}
+              <a href="{{ req.link }}" target="_blank" rel="noopener noreferrer">{{ req.link | truncate(40, True, '…') }}</a>
+            {% endif %}
+          </td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_requirement_id={{ req.id }}#edit-requirement">Edit</a>
+                <form method="post" action="/requirements/{{ req.id }}/deliver-ui">
+                  <button type="submit">Mark Delivered</button>
+                </form>
+                <a href="/requirements/{{ req.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" class="muted">No requirements match the current view.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <h2>Work Items</h2>
   </div>
