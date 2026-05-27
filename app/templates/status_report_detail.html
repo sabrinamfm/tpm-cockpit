@@ -54,20 +54,28 @@
     <h3>Milestones</h3>
 
     <style>
-      .ms-timeline-wrap { overflow-x: auto; margin: 14px 0 20px; padding-bottom: 4px; }
+      .ms-timeline-wrap { overflow-x: auto; margin: 14px 0 8px; padding-bottom: 4px; }
       .ms-timeline {
         display: flex;
-        border-top: 2px solid #d9dee7;
+        position: relative;
         min-width: max-content;
-        padding: 0 20px;
+        padding: 0 24px;
       }
-      .ms-node { display: flex; flex-direction: column; align-items: center; width: 152px; flex-shrink: 0; }
+      .ms-timeline::before {
+        content: '';
+        position: absolute;
+        top: 7px;
+        left: 0; right: 0;
+        height: 2px;
+        background: #d9dee7;
+        z-index: 0;
+      }
+      .ms-node { display: flex; flex-direction: column; align-items: center; width: 112px; flex-shrink: 0; position: relative; }
       .ms-node-dot {
-        width: 18px; height: 18px;
+        width: 14px; height: 14px;
         border-radius: 50%;
-        border: 3px solid #9ca3af;
+        border: 2px solid #9ca3af;
         background: #f3f4f6;
-        margin-top: -10px;
         z-index: 1;
         flex-shrink: 0;
       }
@@ -78,41 +86,43 @@
       .ms-dot-blocked   { border-color: #7a271a; background: #7a271a; }
       .ms-dot-achieved  { border-color: #246b3d; background: #246b3d; }
       .ms-dot-cancelled { border-color: #d1d5db; background: #e5e7eb; }
-      .ms-node-stem { width: 2px; height: 10px; background: #e2e7ef; flex-shrink: 0; }
-      .ms-node-card {
-        display: block; width: 128px;
-        background: #f8fafc;
-        border: 1px solid #e2e7ef;
-        border-radius: 6px;
-        padding: 8px 10px;
-        font-size: 12px;
-        text-decoration: none;
-        color: inherit;
-        margin-top: 4px;
+      .ms-node--achieved, .ms-node--cancelled { opacity: 0.5; }
+      .ms-label {
+        display: flex; flex-direction: column; align-items: center; text-align: center;
+        margin-top: 8px; padding: 0 4px;
+        text-decoration: none; color: inherit;
       }
-      .ms-node-card:hover { border-color: #2364aa; text-decoration: none; }
-      .ms-card-on_track  { border-left: 3px solid #246b3d; }
-      .ms-card-at_risk   { border-left: 3px solid #b45309; }
-      .ms-card-off_track { border-left: 3px solid #b42318; }
-      .ms-card-blocked   { border-left: 3px solid #7a271a; }
-      .ms-card-achieved  { border-left: 3px solid #246b3d; opacity: 0.7; }
-      .ms-card-cancelled { opacity: 0.45; }
-      .ms-card-title { font-weight: 600; margin: 2px 0 3px; line-height: 1.3; }
-      .ms-card-date  { color: #667085; font-size: 11px; }
+      .ms-label:hover .ms-label-title { text-decoration: underline; color: #2364aa; }
+      .ms-label-title {
+        font-size: 11px; font-weight: 600; line-height: 1.3; color: #1a2332;
+        max-width: 104px; margin-bottom: 2px;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      }
+      .ms-label-date { font-size: 10px; color: #667085; margin-bottom: 3px; }
+      .ms-label-chip {
+        font-size: 10px; padding: 1px 5px; border-radius: 10px;
+        border: 1px solid currentColor; white-space: nowrap; background: none;
+      }
+      .ms-chip-planned   { color: #6b7280; }
+      .ms-chip-on_track  { color: #246b3d; }
+      .ms-chip-at_risk   { color: #b45309; }
+      .ms-chip-off_track { color: #b42318; }
+      .ms-chip-blocked   { color: #7a271a; }
+      .ms-chip-achieved  { color: #246b3d; }
+      .ms-chip-cancelled { color: #9ca3af; }
     </style>
 
     {% if milestones_sorted %}
     <div class="ms-timeline-wrap">
       <div class="ms-timeline">
         {% for ms in milestones_sorted %}
-        <div class="ms-node">
+        <div class="ms-node ms-node--{{ ms.status }}">
           <div class="ms-node-dot ms-dot-{{ ms.status }}"></div>
-          <div class="ms-node-stem"></div>
           <a href="/programs/{{ program.id }}/view?edit_milestone_id={{ ms.id }}&return_to={{ _rt }}"
-             class="ms-node-card ms-card-{{ ms.status }}">
-            <div class="ms-card-title">{{ ms.title | truncate(28, True, '…') }}</div>
-            <div class="ms-card-date">{{ ms.target_date | format_date if ms.target_date else "No date" }}</div>
-            <div style="margin-top:4px;"><span class="pill" style="font-size:10px;padding:1px 5px;">{{ ms.status | replace('_', ' ') | title }}</span></div>
+             class="ms-label">
+            <div class="ms-label-title">{{ ms.title }}</div>
+            <div class="ms-label-date">{{ ms.target_date | format_date if ms.target_date else "No date" }}</div>
+            <span class="ms-label-chip ms-chip-{{ ms.status }}">{{ ms.status | replace('_', ' ') | title }}</span>
           </a>
         </div>
         {% endfor %}
