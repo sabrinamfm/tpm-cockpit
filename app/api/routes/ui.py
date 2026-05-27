@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlencode
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
@@ -24,7 +24,7 @@ from app.domain.queries import (
     get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Dependency, Program, ProgramStatus, Risk, SourceType, StatusReport, WorkItem
+from app.models import Dependency, Program, ProgramStatus, Relationship, Risk, SourceType, StatusReport, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -68,6 +68,22 @@ RISK_SORT_LABELS = {
     "target_resolution_date": "Target Resolution",
     "last_reviewed_at": "Last Reviewed",
     "updated_at": "Updated",
+}
+RELATIONSHIP_TYPES = (
+    "relates_to",
+    "blocks",
+    "blocked_by",
+    "mitigates",
+    "tracks",
+    "highlights",
+    "duplicates",
+    "depends_on",
+)
+_RELATIONSHIP_OBJECT_MODEL_MAP = {
+    "work_item": WorkItem,
+    "dependency": Dependency,
+    "risk": Risk,
+    "status_report": StatusReport,
 }
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -115,6 +131,7 @@ templates.env.globals.update(
         "HEALTH_STATES": HEALTH_STATES,
         "HEALTH_STATE_CSS": HEALTH_STATE_CSS,
         "STATUS_REPORT_HEALTHS": STATUS_REPORT_HEALTHS,
+        "RELATIONSHIP_TYPES": RELATIONSHIP_TYPES,
     }
 )
 templates.env.filters.update(
@@ -378,6 +395,8 @@ def program_detail(
     show_new_report: Optional[str] = None,
     report_error: Optional[str] = None,
     edit_report_id: Optional[int] = None,
+    show_new_relationship: Optional[str] = None,
+    relationship_error: Optional[str] = None,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     program = db.scalars(
@@ -499,6 +518,48 @@ def program_detail(
     if edit_report_id is not None:
         edit_report = next((r for r in status_reports if r.id == edit_report_id), None)
 
+    # Build lookup and load relationships for all objects in this program
+    rel_object_lookup: dict[str, dict] = {}
+    all_program_objects: list[dict] = []
+    for wi in program.work_items:
+        info = {"type": "work_item", "id": wi.id, "display_id": wi.display_id, "title": wi.title}
+        rel_object_lookup[f"work_item:{wi.id}"] = info
+        all_program_objects.append(info)
+    for dep in program.dependencies:
+        info = {"type": "dependency", "id": dep.id, "display_id": dep.display_id, "title": dep.title}
+        rel_object_lookup[f"dependency:{dep.id}"] = info
+        all_program_objects.append(info)
+    for r in program.risks:
+        info = {"type": "risk", "id": r.id, "display_id": r.display_id, "title": r.title}
+        rel_object_lookup[f"risk:{r.id}"] = info
+        all_program_objects.append(info)
+    for sr in program.status_reports:
+        info = {"type": "status_report", "id": sr.id, "display_id": sr.display_id, "title": str(sr.report_date)}
+        rel_object_lookup[f"status_report:{sr.id}"] = info
+        all_program_objects.append(info)
+
+    rel_conditions = []
+    for type_name, ids in [
+        ("work_item", [wi.id for wi in program.work_items]),
+        ("dependency", [dep.id for dep in program.dependencies]),
+        ("risk", [r.id for r in program.risks]),
+        ("status_report", [sr.id for sr in program.status_reports]),
+    ]:
+        if ids:
+            rel_conditions.extend([
+                (Relationship.source_type == type_name) & (Relationship.source_id.in_(ids)),
+                (Relationship.target_type == type_name) & (Relationship.target_id.in_(ids)),
+            ])
+    relationships = []
+    if rel_conditions:
+        relationships = list(
+            db.scalars(
+                select(Relationship)
+                .where(or_(*rel_conditions))
+                .order_by(Relationship.created_at.desc())
+            )
+        )
+
     return templates.TemplateResponse(
         request,
         "program_detail.html",
@@ -542,6 +603,11 @@ def program_detail(
             "show_new_report": show_new_report,
             "report_error": report_error,
             "edit_report": edit_report,
+            "relationships": relationships,
+            "rel_object_lookup": rel_object_lookup,
+            "all_program_objects": all_program_objects,
+            "show_new_relationship": show_new_relationship,
+            "relationship_error": relationship_error,
             "today": date.today(),
         },
     )
@@ -1034,6 +1100,87 @@ def delete_status_report_from_ui(report_id: int, db: Session = Depends(get_db)) 
     program_id = report.program_id
     db.delete(report)
     db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Relationship UI handlers ──────────────────────────────────────────────────
+
+_VALID_OBJECT_TYPES = frozenset(_RELATIONSHIP_OBJECT_MODEL_MAP.keys())
+
+
+@router.post("/programs/{program_id}/relationships/create", include_in_schema=False)
+async def create_relationship_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    source_ref = parsed.get("source_ref", "")
+    target_ref = parsed.get("target_ref", "")
+    relationship_type = parsed.get("relationship_type", "")
+    note = parsed.get("note", "").strip() or None
+
+    def _error(msg: str) -> RedirectResponse:
+        query = urlencode({"show_new_relationship": "1", "relationship_error": msg})
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-relationship",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    if ":" not in source_ref or ":" not in target_ref:
+        return _error("Source and target are required.")
+    source_type, _, source_id_str = source_ref.partition(":")
+    target_type, _, target_id_str = target_ref.partition(":")
+    if source_type not in _VALID_OBJECT_TYPES or target_type not in _VALID_OBJECT_TYPES:
+        return _error("Invalid object type.")
+    if relationship_type not in RELATIONSHIP_TYPES:
+        return _error("Invalid relationship type.")
+    try:
+        source_id = int(source_id_str)
+        target_id = int(target_id_str)
+    except ValueError:
+        return _error("Invalid object reference.")
+    if source_type == target_type and source_id == target_id:
+        return _error("Source and target cannot be the same object.")
+    source_model = _RELATIONSHIP_OBJECT_MODEL_MAP[source_type]
+    target_model = _RELATIONSHIP_OBJECT_MODEL_MAP[target_type]
+    if db.get(source_model, source_id) is None:
+        return _error("Source object not found.")
+    if db.get(target_model, target_id) is None:
+        return _error("Target object not found.")
+
+    from app.models.relationship import Relationship as _Rel
+    db.add(_Rel(
+        source_type=source_type,
+        source_id=source_id,
+        relationship_type=relationship_type,
+        target_type=target_type,
+        target_id=target_id,
+        note=note,
+    ))
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/relationships/{relationship_id}/delete-ui", include_in_schema=False)
+async def delete_relationship_from_ui(
+    relationship_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    parsed = await _parse_form(request)
+    program_id_str = parsed.get("program_id", "")
+    rel = db.get(Relationship, relationship_id)
+    if rel is not None:
+        db.delete(rel)
+        db.commit()
+    try:
+        program_id = int(program_id_str)
+    except (ValueError, TypeError):
+        return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 

@@ -53,6 +53,7 @@ Program
 → Dependencies
 → Risks
 → Status Reports
+→ Relationships (cross-object, typed, directional)
 
 ## Planned Product Model
 Program

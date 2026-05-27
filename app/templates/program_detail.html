@@ -837,6 +837,98 @@
   </table>
 </section>
 
+<section class="panel">
+  <h2>Relationships</h2>
+
+  <details id="new-relationship" class="collapsible-panel"{% if show_new_relationship == "1" or relationship_error %} open{% endif %}>
+    <summary class="button">New Relationship</summary>
+    <div class="collapsible-body">
+      {% if relationship_error %}<div class="error">{{ relationship_error }}</div>{% endif %}
+      {% if all_program_objects %}
+      <form method="post" action="/programs/{{ program.id }}/relationships/create">
+        <div class="compact-fields">
+          <div>
+            <label for="rel-source">Source</label>
+            <select id="rel-source" name="source_ref" required>
+              <option value="">Select source…</option>
+              {% for obj in all_program_objects %}
+                <option value="{{ obj.type }}:{{ obj.id }}">{{ obj.display_id }} — {{ obj.title | truncate(60) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="rel-type">Relationship</label>
+            <select id="rel-type" name="relationship_type" required>
+              {% for rt in RELATIONSHIP_TYPES %}
+                <option value="{{ rt }}">{{ rt | replace('_', ' ') }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="rel-target">Target</label>
+            <select id="rel-target" name="target_ref" required>
+              <option value="">Select target…</option>
+              {% for obj in all_program_objects %}
+                <option value="{{ obj.type }}:{{ obj.id }}">{{ obj.display_id }} — {{ obj.title | truncate(60) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="rel-note">Note</label>
+            <input id="rel-note" name="note" maxlength="500" placeholder="Optional note">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Add Relationship</button>
+        </div>
+      </form>
+      {% else %}
+      <p class="muted">Add work items, dependencies, risks, or status reports to this program before creating relationships.</p>
+      {% endif %}
+    </div>
+  </details>
+
+  {% if relationships %}
+  <table>
+    <thead>
+      <tr><th>Source</th><th>Relationship</th><th>Target</th><th>Note</th><th class="row-actions">Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for rel in relationships %}
+        {% set src = rel_object_lookup.get(rel.source_type ~ ":" ~ rel.source_id) %}
+        {% set tgt = rel_object_lookup.get(rel.target_type ~ ":" ~ rel.target_id) %}
+        <tr>
+          <td>
+            {% if src %}
+              <span class="display-id">{{ src.display_id }}</span>{{ src.title | truncate(50) }}
+            {% else %}
+              <span class="muted">{{ rel.source_type }} #{{ rel.source_id }}</span>
+            {% endif %}
+          </td>
+          <td><span class="pill">{{ rel.relationship_type | replace('_', ' ') }}</span></td>
+          <td>
+            {% if tgt %}
+              <span class="display-id">{{ tgt.display_id }}</span>{{ tgt.title | truncate(50) }}
+            {% else %}
+              <span class="muted">{{ rel.target_type }} #{{ rel.target_id }}</span>
+            {% endif %}
+          </td>
+          <td class="muted">{{ rel.note or "" }}</td>
+          <td class="row-actions">
+            <form method="post" action="/relationships/{{ rel.id }}/delete-ui">
+              <input type="hidden" name="program_id" value="{{ program.id }}">
+              <button type="submit" class="button secondary">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted empty-state">No relationships yet.</p>
+  {% endif %}
+</section>
+
 <div class="placeholder-grid">
   {% for title in ["Decisions", "Notes"] %}
     <section class="panel placeholder">
