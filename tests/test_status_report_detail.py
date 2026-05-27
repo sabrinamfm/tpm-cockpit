@@ -24,18 +24,19 @@ def test_status_report_detail_shows_metadata(client) -> None:
     assert resp.status_code == 200
     assert "2026-05-26" in resp.text
     assert "On Track" in resp.text
-    assert report["display_id"] in resp.text
+    assert report["report_title"] in resp.text
 
 
-def test_status_report_detail_shows_health_rationale(client) -> None:
-    prog = client.post("/programs", json={"name": "P"}).json()
+def test_status_report_detail_shows_report_title(client) -> None:
+    prog = client.post("/programs", json={"name": "Orion"}).json()
     report = client.post(
         f"/programs/{prog['id']}/status-reports",
-        json={"report_date": "2026-05-26", "reported_health": "on_track", "health_rationale": "Looking great."},
+        json={"report_date": "2026-05-26", "reported_health": "on_track"},
     ).json()
+    assert report["report_title"] == "Week 22 Orion Report"
     resp = client.get(f"/status-reports/{report['id']}/view")
     assert resp.status_code == 200
-    assert "Looking great." in resp.text
+    assert "Week 22 Orion Report" in resp.text
 
 
 def test_status_report_detail_shows_summary(client) -> None:
@@ -100,13 +101,13 @@ def test_status_report_create_redirect_page_shows_report(client) -> None:
     prog = client.post("/programs", json={"name": "P"}).json()
     resp = client.post(
         f"/programs/{prog['id']}/status-reports/create",
-        data={"report_date": "2026-05-26", "reported_health": "at_risk", "health_rationale": "Issues found."},
+        data={"report_date": "2026-05-26", "reported_health": "at_risk", "summary": "Looking good."},
         follow_redirects=True,
     )
     assert resp.status_code == 200
     assert "2026-05-26" in resp.text
     assert "At Risk" in resp.text
-    assert "Issues found." in resp.text
+    assert "Looking good." in resp.text
 
 
 # ── Update redirect ───────────────────────────────────────────────────────────

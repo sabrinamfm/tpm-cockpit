@@ -1328,12 +1328,14 @@ async def create_status_report_from_ui(
         )
 
     from datetime import date as _date
+    report_date = _date.fromisoformat(report_date_str)
+    week = report_date.isocalendar().week
     report = StatusReport(
         program_id=program_id,
-        report_date=_date.fromisoformat(report_date_str),
+        report_date=report_date,
+        report_title=f"Week {week} {program.name} Report",
         reported_health=reported_health,
         suggested_health=compute_suggested_health(program),
-        health_rationale=parsed.get("health_rationale", "").strip() or None,
         summary=parsed.get("summary", "").strip() or None,
     )
     db.add(report)
@@ -1360,7 +1362,6 @@ async def update_status_report_from_ui(
     if report_date_str:
         from datetime import date as _date
         report.report_date = _date.fromisoformat(report_date_str)
-    report.health_rationale = parsed.get("health_rationale", "").strip() or None
     report.summary = parsed.get("summary", "").strip() or None
     db.add(report)
     db.commit()

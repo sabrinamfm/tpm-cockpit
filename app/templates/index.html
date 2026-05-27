@@ -97,7 +97,7 @@
             <td>
               {% set latest_report = latest_reports.get(program.id) %}
               {% if latest_report %}
-                <a href="/status-reports/{{ latest_report.id }}/view" class="pill {{ HEALTH_STATE_CSS[latest_report.reported_health] }}" style="text-decoration:none;">{{ latest_report.reported_health | replace('_', ' ') | title }}</a>
+                <a href="/status-reports/{{ latest_report.id }}/view" class="pill {{ HEALTH_STATE_CSS[latest_report.reported_health] }}" style="text-decoration:none;" title="{{ latest_report.report_title or latest_report.display_id }}">{{ latest_report.reported_health | replace('_', ' ') | title }}</a>
               {% else %}
                 <span class="muted">No report yet</span>
               {% endif %}

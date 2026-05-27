@@ -28,6 +28,7 @@ class StatusReport(Base):
         index=True,
     )
     report_date: Mapped[date] = mapped_column(Date, nullable=False)
+    report_title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     reported_health: Mapped[str] = mapped_column(String(20), nullable=False)
     suggested_health: Mapped[str] = mapped_column(String(20), nullable=False)
     health_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

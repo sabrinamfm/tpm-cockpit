@@ -41,8 +41,10 @@ def create_status_report(
     if program is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
 
+    week = report_in.report_date.isocalendar().week
     report = StatusReport(
         program_id=program_id,
+        report_title=f"Week {week} {program.name} Report",
         suggested_health=compute_suggested_health(program),
         **report_in.model_dump(),
     )

@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ report.display_id }} — Status Report{% endblock %}
+{% block title %}{% if report.report_title %}{{ report.report_title }}{% else %}{{ report.display_id }}{% endif %} — Status Report{% endblock %}
 {% block content %}
 <header>
   <div>
-    <h1><span class="display-id display-id--lg">{{ report.display_id }}</span> Status Report</h1>
+    <h1>{% if report.report_title %}{{ report.report_title }}{% else %}<span class="display-id display-id--lg">{{ report.display_id }}</span> Status Report{% endif %}</h1>
     <div class="muted">{{ program.name }} · {{ report.report_date | format_date }}</div>
   </div>
   <div class="top-links">
@@ -37,12 +37,6 @@
     <div><strong>Created</strong><br><span class="muted">{{ report.created_at | format_datetime }}</span></div>
     <div><strong>Updated</strong><br><span class="muted">{{ report.updated_at | format_datetime }}</span></div>
   </div>
-  {% if report.health_rationale %}
-    <div style="margin-top:16px;">
-      <strong>Health Rationale</strong>
-      <p style="margin:6px 0;">{{ report.health_rationale }}</p>
-    </div>
-  {% endif %}
   {% if report.summary %}
     <div style="margin-top:16px;">
       <strong>Summary</strong>
@@ -224,8 +218,6 @@
           </select>
         </div>
       </div>
-      <label>Health Rationale</label>
-      <textarea name="health_rationale">{{ report.health_rationale or "" }}</textarea>
       <label>Summary</label>
       <textarea name="summary">{{ report.summary or "" }}</textarea>
       <div class="actions">

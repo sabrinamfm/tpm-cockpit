@@ -23,6 +23,7 @@ class StatusReportUpdate(BaseModel):
 class StatusReportRead(BaseModel):
     id: int
     display_id: str
+    report_title: Optional[str]
     program_id: int
     report_date: date
     reported_health: str

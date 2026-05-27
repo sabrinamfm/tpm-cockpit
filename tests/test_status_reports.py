@@ -109,6 +109,7 @@ def test_create_status_report(client) -> None:
     assert data["suggested_health"] in ("on_track", "at_risk", "off_track")
     assert data["health_rationale"] == "No blockers."
     assert data["summary"] == "All milestones on schedule."
+    assert data["report_title"] == "Week 22 Alpha Report"
 
 
 def test_create_status_report_minimal(client) -> None:
@@ -301,18 +302,13 @@ def test_update_status_report_from_ui(client) -> None:
 
     response = client.post(
         f"/status-reports/{report['id']}/update",
-        data={
-            "report_date": "2026-05-26",
-            "reported_health": "at_risk",
-            "health_rationale": "Found a risk.",
-        },
+        data={"report_date": "2026-05-26", "reported_health": "at_risk"},
         follow_redirects=True,
     )
 
     assert response.status_code == 200
     updated = client.get(f"/status-reports/{report['id']}").json()
     assert updated["reported_health"] == "at_risk"
-    assert updated["health_rationale"] == "Found a risk."
 
 
 def test_delete_status_report_from_ui(client) -> None:
@@ -348,21 +344,21 @@ def test_program_detail_shows_latest_report_first(client) -> None:
     assert text.index("2026-05-26") < text.index("2026-05-20")
 
 
-def test_program_detail_shows_divergence_indicator(client) -> None:
+def test_report_detail_shows_divergence_indicator(client) -> None:
     program = client.post("/programs", json={"name": "Divergence"}).json()
     client.post(
         f"/programs/{program['id']}/work-items",
         json={"title": "Blocked", "status": "blocked"},
     )
-    client.post(
+    report = client.post(
         f"/programs/{program['id']}/status-reports",
         json={"report_date": "2026-05-26", "reported_health": "on_track"},
-    )
+    ).json()
 
-    response = client.get(f"/programs/{program['id']}/view")
+    response = client.get(f"/status-reports/{report['id']}/view")
 
     assert response.status_code == 200
-    assert "↑" in response.text
+    assert "differs" in response.text
 
 
 # ── UI: Program list column ───────────────────────────────────────────────────
