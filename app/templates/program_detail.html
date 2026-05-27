@@ -18,6 +18,7 @@
   <div class="detail-grid">
     {% if program.display_id %}<div><strong>ID</strong><br><span class="display-id display-id--lg">{{ program.display_id }}</span></div>{% endif %}
     <div><strong>Status</strong><br><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></div>
+    {% if program.launch_date %}<div><strong>Launch</strong><br>{{ program.launch_date | format_date }}</div>{% endif %}
     <div>
       <strong>Health</strong><br>
       <span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span>
@@ -133,6 +134,135 @@
   {% else %}
   <p class="muted empty-state">No status reports yet.</p>
   {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Milestones</h2>
+
+  <details id="new-milestone" class="collapsible-panel"{% if show_new_milestone == "1" or milestone_error %} open{% endif %}>
+    <summary class="button">New Milestone</summary>
+    <div class="collapsible-body">
+      {% if milestone_error %}<div class="error">{{ milestone_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/milestones/create">
+        <label for="milestone-title">Title</label>
+        <input id="milestone-title" name="title" required maxlength="200">
+        <label for="milestone-description">Description</label>
+        <textarea id="milestone-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="milestone-status">Status</label>
+            <select id="milestone-status" name="status">
+              {% for ms in MILESTONE_STATUSES %}
+                <option value="{{ ms }}"{% if ms == "planned" %} selected{% endif %}>{{ ms | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="milestone-target-date">Target Date</label>
+            <input id="milestone-target-date" name="target_date" type="date">
+          </div>
+          <div>
+            <label for="milestone-owner">Owner</label>
+            <input id="milestone-owner" name="owner" maxlength="120">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Create Milestone</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_milestone %}
+  <details id="edit-milestone" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Milestone</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/milestones/{{ edit_milestone.id }}/update">
+        <label for="edit-milestone-title">Title</label>
+        <input id="edit-milestone-title" name="title" required maxlength="200" value="{{ edit_milestone.title }}">
+        <label for="edit-milestone-description">Description</label>
+        <textarea id="edit-milestone-description" name="description">{{ edit_milestone.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-milestone-status">Status</label>
+            <select id="edit-milestone-status" name="status">
+              {% for ms in MILESTONE_STATUSES %}
+                <option value="{{ ms }}"{% if ms == edit_milestone.status %} selected{% endif %}>{{ ms | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-milestone-target-date">Target Date</label>
+            <input id="edit-milestone-target-date" name="target_date" type="date" value="{{ edit_milestone.target_date | format_date }}">
+          </div>
+          <div>
+            <label for="edit-milestone-owner">Owner</label>
+            <input id="edit-milestone-owner" name="owner" maxlength="120" value="{{ edit_milestone.owner or '' }}">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Save Milestone</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="milestone_sort">Sort</label>
+      <select id="milestone_sort" name="milestone_sort">
+        {% for value, label in MILESTONE_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == milestone_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Target Date</th>
+        <th>Owner</th>
+        <th>Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for milestone in milestones %}
+        <tr>
+          <td>{% if milestone.display_id %}<span class="display-id">{{ milestone.display_id }}</span>{% endif %}{{ milestone.title }}</td>
+          <td><span class="pill">{{ milestone.status | replace('_', ' ') | title }}</span></td>
+          <td>{{ milestone.target_date | format_date }}</td>
+          <td>{{ milestone.owner or "" }}</td>
+          <td>{{ milestone.updated_at | format_datetime }}</td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_milestone_id={{ milestone.id }}#edit-milestone">Edit</a>
+                <form method="post" action="/milestones/{{ milestone.id }}/achieve-ui">
+                  <button type="submit">Mark Achieved</button>
+                </form>
+                <a href="/milestones/{{ milestone.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="muted">No milestones yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 
 <section class="panel">

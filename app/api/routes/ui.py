@@ -24,7 +24,7 @@ from app.domain.queries import (
     get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Dependency, Program, ProgramStatus, Relationship, Risk, SourceType, StatusReport, WorkItem
+from app.models import Dependency, Milestone, Program, ProgramStatus, Relationship, Risk, SourceType, StatusReport, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -69,6 +69,14 @@ RISK_SORT_LABELS = {
     "last_reviewed_at": "Last Reviewed",
     "updated_at": "Updated",
 }
+MILESTONE_STATUSES = ("planned", "in_progress", "achieved", "missed", "cancelled")
+MILESTONE_STATUS_RANK = {"achieved": 0, "in_progress": 1, "planned": 2, "missed": 3, "cancelled": 4}
+MILESTONE_SORT_LABELS = {
+    "target_date": "Target Date",
+    "status": "Status",
+    "owner": "Owner",
+    "updated_at": "Updated",
+}
 RELATIONSHIP_TYPES = (
     "relates_to",
     "blocks",
@@ -84,6 +92,7 @@ _RELATIONSHIP_OBJECT_MODEL_MAP = {
     "dependency": Dependency,
     "risk": Risk,
     "status_report": StatusReport,
+    "milestone": Milestone,
 }
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -132,6 +141,8 @@ templates.env.globals.update(
         "HEALTH_STATE_CSS": HEALTH_STATE_CSS,
         "STATUS_REPORT_HEALTHS": STATUS_REPORT_HEALTHS,
         "RELATIONSHIP_TYPES": RELATIONSHIP_TYPES,
+        "MILESTONE_STATUSES": MILESTONE_STATUSES,
+        "MILESTONE_SORT_LABELS": MILESTONE_SORT_LABELS,
     }
 )
 templates.env.filters.update(
@@ -236,7 +247,12 @@ async def create_program_from_ui(request: Request, db: Session = Depends(get_db)
         ps = db.scalar(select(ProgramStatus).order_by(ProgramStatus.sort_order.asc()))
     if ps is None:
         return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
-    db.add(Program(name=name, description=description, status_id=ps.id))
+    db.add(Program(
+        name=name,
+        description=description,
+        launch_date=_parse_due_date(parsed.get("launch_date", "")),
+        status_id=ps.id,
+    ))
     db.commit()
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -270,6 +286,7 @@ async def update_program_from_ui(
     if name and ps is not None:
         program.name = name
         program.description = parsed.get("description", "").strip() or None
+        program.launch_date = _parse_due_date(parsed.get("launch_date", ""))
         program.status_id = ps.id
         db.add(program)
         db.commit()
@@ -363,6 +380,16 @@ def _risk_sort_key(risk: Risk, sort: str):
     return (risk.updated_at, risk.id)
 
 
+def _milestone_sort_key(milestone: Milestone, sort: str):
+    if sort == "target_date":
+        return (milestone.target_date or date.max, milestone.id)
+    if sort == "status":
+        return (MILESTONE_STATUS_RANK.get(milestone.status, 99), milestone.id)
+    if sort == "owner":
+        return ((milestone.owner or "").lower(), milestone.id)
+    return (milestone.updated_at, milestone.id)
+
+
 @router.get("/programs/{program_id}/view", response_class=HTMLResponse, include_in_schema=False)
 def program_detail(
     request: Request,
@@ -395,6 +422,10 @@ def program_detail(
     show_new_report: Optional[str] = None,
     report_error: Optional[str] = None,
     edit_report_id: Optional[int] = None,
+    milestone_sort: str = "target_date",
+    show_new_milestone: Optional[str] = None,
+    milestone_error: Optional[str] = None,
+    edit_milestone_id: Optional[int] = None,
     show_new_relationship: Optional[str] = None,
     relationship_error: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -406,6 +437,7 @@ def program_detail(
             selectinload(Program.dependencies),
             selectinload(Program.risks),
             selectinload(Program.status_reports),
+            selectinload(Program.milestones),
         )
         .where(Program.id == program_id)
     ).one_or_none()
@@ -439,6 +471,8 @@ def program_detail(
         risk_likelihood_filter = None
     if risk_sort not in RISK_SORT_LABELS:
         risk_sort = "updated_at"
+    if milestone_sort not in MILESTONE_SORT_LABELS:
+        milestone_sort = "target_date"
 
     work_items = list(program.work_items)
     if work_status_filter:
@@ -518,6 +552,16 @@ def program_detail(
     if edit_report_id is not None:
         edit_report = next((r for r in status_reports if r.id == edit_report_id), None)
 
+    milestones = sorted(
+        program.milestones,
+        key=lambda m: _milestone_sort_key(m, milestone_sort),
+        reverse=milestone_sort == "updated_at",
+    )
+    edit_milestone = None
+    if edit_milestone_id is not None:
+        edit_milestone = next((m for m in program.milestones if m.id == edit_milestone_id), None)
+    milestone_owners = sorted({m.owner for m in program.milestones if m.owner})
+
     # Build lookup and load relationships for all objects in this program
     rel_object_lookup: dict[str, dict] = {}
     all_program_objects: list[dict] = []
@@ -537,6 +581,10 @@ def program_detail(
         info = {"type": "status_report", "id": sr.id, "display_id": sr.display_id, "title": str(sr.report_date)}
         rel_object_lookup[f"status_report:{sr.id}"] = info
         all_program_objects.append(info)
+    for ms in program.milestones:
+        info = {"type": "milestone", "id": ms.id, "display_id": ms.display_id, "title": ms.title}
+        rel_object_lookup[f"milestone:{ms.id}"] = info
+        all_program_objects.append(info)
 
     rel_conditions = []
     for type_name, ids in [
@@ -544,6 +592,7 @@ def program_detail(
         ("dependency", [dep.id for dep in program.dependencies]),
         ("risk", [r.id for r in program.risks]),
         ("status_report", [sr.id for sr in program.status_reports]),
+        ("milestone", [ms.id for ms in program.milestones]),
     ]:
         if ids:
             rel_conditions.extend([
@@ -603,6 +652,12 @@ def program_detail(
             "show_new_report": show_new_report,
             "report_error": report_error,
             "edit_report": edit_report,
+            "milestones": milestones,
+            "milestone_sort": milestone_sort,
+            "show_new_milestone": show_new_milestone,
+            "milestone_error": milestone_error,
+            "edit_milestone": edit_milestone,
+            "milestone_owners": milestone_owners,
             "relationships": relationships,
             "rel_object_lookup": rel_object_lookup,
             "all_program_objects": all_program_objects,
@@ -1099,6 +1154,106 @@ def delete_status_report_from_ui(report_id: int, db: Session = Depends(get_db)) 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
     program_id = report.program_id
     db.delete(report)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Milestone UI handlers ────────────────────────────────────────────────────
+
+@router.post("/programs/{program_id}/milestones/create", include_in_schema=False)
+async def create_milestone_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    milestone_status = parsed.get("status", "planned")
+    if not title or milestone_status not in MILESTONE_STATUSES:
+        query = urlencode({"show_new_milestone": "1", "milestone_error": "Title and status are required."})
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-milestone",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    db.add(Milestone(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        target_date=_parse_due_date(parsed.get("target_date", "")),
+        status=milestone_status,
+        owner=parsed.get("owner", "").strip() or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/milestones/{milestone_id}/update", include_in_schema=False)
+async def update_milestone_from_ui(
+    milestone_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    milestone = db.get(Milestone, milestone_id)
+    if milestone is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    milestone_status = parsed.get("status", milestone.status)
+    if title and milestone_status in MILESTONE_STATUSES:
+        milestone.title = title
+        milestone.description = parsed.get("description", "").strip() or None
+        milestone.target_date = _parse_due_date(parsed.get("target_date", ""))
+        milestone.status = milestone_status
+        milestone.owner = parsed.get("owner", "").strip() or None
+        db.add(milestone)
+        db.commit()
+    return RedirectResponse(f"/programs/{milestone.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/milestones/{milestone_id}/achieve-ui", include_in_schema=False)
+def achieve_milestone_from_ui(milestone_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    milestone = db.get(Milestone, milestone_id)
+    if milestone is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+    milestone.status = "achieved"
+    db.add(milestone)
+    db.commit()
+    return RedirectResponse(f"/programs/{milestone.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/milestones/{milestone_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_milestone_page(
+    request: Request, milestone_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    milestone = db.get(Milestone, milestone_id)
+    if milestone is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "page_title": "Delete Milestone?",
+            "subtitle": milestone.title,
+            "back_url": f"/programs/{milestone.program_id}/view",
+            "back_label": "Back to Program",
+            "message": "This removes the Milestone from the Program.",
+            "action_url": f"/milestones/{milestone.id}/delete",
+            "cancel_url": f"/programs/{milestone.program_id}/view",
+        },
+    )
+
+
+@router.post("/milestones/{milestone_id}/delete", include_in_schema=False)
+def delete_milestone_from_ui(milestone_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    milestone = db.get(Milestone, milestone_id)
+    if milestone is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+    program_id = milestone.program_id
+    db.delete(milestone)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 

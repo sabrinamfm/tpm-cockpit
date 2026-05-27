@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-ObjectType = Literal["work_item", "dependency", "risk", "status_report"]
+ObjectType = Literal["work_item", "dependency", "risk", "status_report", "milestone"]
 RelationshipType = Literal[
     "relates_to",
     "blocks",

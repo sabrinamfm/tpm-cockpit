@@ -19,6 +19,8 @@
       <input id="name" name="name" required maxlength="200">
       <label for="description">Description</label>
       <textarea id="description" name="description"></textarea>
+      <label for="launch_date">Launch Date</label>
+      <input id="launch_date" name="launch_date" type="date">
       <label for="status">Status</label>
       <select id="status" name="status">
         {% for ps in all_statuses %}
@@ -77,6 +79,7 @@
           <th>Description</th>
           <th>Status</th>
           <th>Health</th>
+          <th>Launch</th>
           <th>Report</th>
           <th>Updated</th>
           <th>Actions</th>
@@ -90,6 +93,7 @@
             <td>{{ program.description or "" }}</td>
             <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
             <td><span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span></td>
+            <td>{{ program.launch_date | format_date }}</td>
             <td>
               {% set latest_report = latest_reports.get(program.id) %}
               {% if latest_report %}
@@ -111,7 +115,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="7" class="muted">No programs match the current view.</td>
+            <td colspan="8" class="muted">No programs match the current view.</td>
           </tr>
         {% endfor %}
       </tbody>

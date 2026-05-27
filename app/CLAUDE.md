@@ -63,7 +63,9 @@ Program
 → Status Reports
 → Relationships
 → Decisions
-→ Notes
+→ Milestones
+→ Features
+→ Requirements
 
 ## Important Terminology
 Use "Work Item" instead of "Task".

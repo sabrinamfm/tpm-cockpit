@@ -14,6 +14,8 @@
     <input id="name" name="name" required maxlength="200" value="{{ program.name }}">
     <label for="description">Description</label>
     <textarea id="description" name="description">{{ program.description or "" }}</textarea>
+    <label for="launch_date">Launch Date</label>
+    <input id="launch_date" name="launch_date" type="date" value="{{ program.launch_date | format_date }}">
     <label for="status">Status</label>
     <select id="status" name="status">
       {% for ps in all_statuses %}
