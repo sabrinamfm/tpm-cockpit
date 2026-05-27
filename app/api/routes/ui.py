@@ -69,12 +69,14 @@ RISK_SORT_LABELS = {
     "last_reviewed_at": "Last Reviewed",
     "updated_at": "Updated",
 }
-MILESTONE_STATUSES = ("planned", "in_progress", "achieved", "missed", "cancelled")
-MILESTONE_STATUS_RANK = {"achieved": 0, "in_progress": 1, "planned": 2, "missed": 3, "cancelled": 4}
+MILESTONE_STATUSES = ("planned", "on_track", "at_risk", "off_track", "blocked", "achieved", "cancelled")
+MILESTONE_STATUS_RANK = {
+    "blocked": 0, "off_track": 1, "at_risk": 2, "on_track": 3,
+    "planned": 4, "achieved": 5, "cancelled": 6,
+}
 MILESTONE_SORT_LABELS = {
     "target_date": "Target Date",
     "status": "Status",
-    "owner": "Owner",
     "updated_at": "Updated",
 }
 RELATIONSHIP_TYPES = (
@@ -385,8 +387,6 @@ def _milestone_sort_key(milestone: Milestone, sort: str):
         return (milestone.target_date or date.max, milestone.id)
     if sort == "status":
         return (MILESTONE_STATUS_RANK.get(milestone.status, 99), milestone.id)
-    if sort == "owner":
-        return ((milestone.owner or "").lower(), milestone.id)
     return (milestone.updated_at, milestone.id)
 
 
@@ -560,7 +560,6 @@ def program_detail(
     edit_milestone = None
     if edit_milestone_id is not None:
         edit_milestone = next((m for m in program.milestones if m.id == edit_milestone_id), None)
-    milestone_owners = sorted({m.owner for m in program.milestones if m.owner})
 
     # Build lookup and load relationships for all objects in this program
     rel_object_lookup: dict[str, dict] = {}
@@ -657,7 +656,6 @@ def program_detail(
             "show_new_milestone": show_new_milestone,
             "milestone_error": milestone_error,
             "edit_milestone": edit_milestone,
-            "milestone_owners": milestone_owners,
             "relationships": relationships,
             "rel_object_lookup": rel_object_lookup,
             "all_program_objects": all_program_objects,
@@ -1184,7 +1182,6 @@ async def create_milestone_from_ui(
         description=parsed.get("description", "").strip() or None,
         target_date=_parse_due_date(parsed.get("target_date", "")),
         status=milestone_status,
-        owner=parsed.get("owner", "").strip() or None,
     ))
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1208,7 +1205,6 @@ async def update_milestone_from_ui(
         milestone.description = parsed.get("description", "").strip() or None
         milestone.target_date = _parse_due_date(parsed.get("target_date", ""))
         milestone.status = milestone_status
-        milestone.owner = parsed.get("owner", "").strip() or None
         db.add(milestone)
         db.commit()
     return RedirectResponse(f"/programs/{milestone.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)

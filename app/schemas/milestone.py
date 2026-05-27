@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-MilestoneStatus = Literal["planned", "in_progress", "achieved", "missed", "cancelled"]
+MilestoneStatus = Literal["planned", "on_track", "at_risk", "off_track", "blocked", "achieved", "cancelled"]
 
 
 class MilestoneBase(BaseModel):
@@ -11,7 +11,6 @@ class MilestoneBase(BaseModel):
     description: Optional[str] = None
     target_date: Optional[date] = None
     status: MilestoneStatus = "planned"
-    owner: Optional[str] = Field(default=None, max_length=120)
 
 
 class MilestoneCreate(MilestoneBase):
@@ -23,7 +22,6 @@ class MilestoneUpdate(BaseModel):
     description: Optional[str] = None
     target_date: Optional[date] = None
     status: Optional[MilestoneStatus] = None
-    owner: Optional[str] = Field(default=None, max_length=120)
 
 
 class MilestoneRead(MilestoneBase):

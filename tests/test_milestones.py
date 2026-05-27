@@ -189,11 +189,26 @@ def test_achieve_milestone_via_ui(client) -> None:
     prog = client.post("/programs", json={"name": "P"}).json()
     ms = client.post(
         f"/programs/{prog['id']}/milestones",
-        json={"title": "M", "status": "in_progress"},
+        json={"title": "M", "status": "on_track"},
     ).json()
     resp = client.post(f"/milestones/{ms['id']}/achieve-ui", follow_redirects=False)
     assert resp.status_code == 303
     assert client.get(f"/milestones/{ms['id']}").json()["status"] == "achieved"
+
+
+def test_milestone_new_statuses_are_valid(client) -> None:
+    prog = client.post("/programs", json={"name": "P"}).json()
+    for s in ("on_track", "at_risk", "off_track", "blocked"):
+        resp = client.post(f"/programs/{prog['id']}/milestones", json={"title": s, "status": s})
+        assert resp.status_code == 201, f"status {s!r} should be valid"
+        assert resp.json()["status"] == s
+
+
+def test_milestone_removed_statuses_are_rejected(client) -> None:
+    prog = client.post("/programs", json={"name": "P"}).json()
+    for s in ("in_progress", "missed"):
+        resp = client.post(f"/programs/{prog['id']}/milestones", json={"title": "M", "status": s})
+        assert resp.status_code == 422, f"status {s!r} should be rejected"
 
 
 def test_delete_milestone_via_ui(client) -> None:

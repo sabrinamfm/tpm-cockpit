@@ -67,5 +67,12 @@ Program
 → Features
 → Requirements
 
+## Domain Rules (not yet enforced in code)
+
+- A Milestone with status `at_risk` or `off_track` should have at least one
+  Relationship providing evidence (e.g. links to a blocked dependency or a
+  failing work item). This is a future soft-validation rule, not yet
+  implemented.
+
 ## Important Terminology
 Use "Work Item" instead of "Task".

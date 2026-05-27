@@ -161,10 +161,6 @@
             <label for="milestone-target-date">Target Date</label>
             <input id="milestone-target-date" name="target_date" type="date">
           </div>
-          <div>
-            <label for="milestone-owner">Owner</label>
-            <input id="milestone-owner" name="owner" maxlength="120">
-          </div>
         </div>
         <div class="actions">
           <button type="submit">Create Milestone</button>
@@ -194,10 +190,6 @@
           <div>
             <label for="edit-milestone-target-date">Target Date</label>
             <input id="edit-milestone-target-date" name="target_date" type="date" value="{{ edit_milestone.target_date | format_date }}">
-          </div>
-          <div>
-            <label for="edit-milestone-owner">Owner</label>
-            <input id="edit-milestone-owner" name="owner" maxlength="120" value="{{ edit_milestone.owner or '' }}">
           </div>
         </div>
         <div class="actions">
@@ -230,8 +222,6 @@
         <th>Title</th>
         <th>Status</th>
         <th>Target Date</th>
-        <th>Owner</th>
-        <th>Updated</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -241,8 +231,6 @@
           <td>{% if milestone.display_id %}<span class="display-id">{{ milestone.display_id }}</span>{% endif %}{{ milestone.title }}</td>
           <td><span class="pill">{{ milestone.status | replace('_', ' ') | title }}</span></td>
           <td>{{ milestone.target_date | format_date }}</td>
-          <td>{{ milestone.owner or "" }}</td>
-          <td>{{ milestone.updated_at | format_datetime }}</td>
           <td class="row-actions">
             <details class="action-menu">
               <summary class="button secondary">Actions</summary>
@@ -258,7 +246,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="6" class="muted">No milestones yet.</td>
+          <td colspan="4" class="muted">No milestones yet.</td>
         </tr>
       {% endfor %}
     </tbody>

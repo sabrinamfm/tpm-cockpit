@@ -11,9 +11,12 @@ class Milestone(Base):
     __tablename__ = "milestones"
     __table_args__ = (
         CheckConstraint(
-            "status in ('planned', 'in_progress', 'achieved', 'missed', 'cancelled')",
+            "status in ('planned', 'on_track', 'at_risk', 'off_track', 'blocked', 'achieved', 'cancelled')",
             name="ck_milestones_status_allowed",
         ),
+        # Future governance rule (not yet enforced in code):
+        # A milestone with status 'at_risk' or 'off_track' should have at least one
+        # supporting relationship that provides evidence for that assessment.
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -27,7 +30,6 @@ class Milestone(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="planned")
-    owner: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
