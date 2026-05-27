@@ -1235,6 +1235,67 @@ def delete_risk_from_ui(risk_id: int, db: Session = Depends(get_db)) -> Redirect
 
 # ── Status Report UI handlers ─────────────────────────────────────────────────
 
+@router.get("/status-reports/{report_id}/view", response_class=HTMLResponse, include_in_schema=False)
+def view_status_report(
+    request: Request,
+    report_id: int,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    report = db.get(StatusReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
+
+    program = db.scalars(
+        select(Program)
+        .options(
+            selectinload(Program.work_items),
+            selectinload(Program.dependencies),
+            selectinload(Program.risks),
+            selectinload(Program.milestones),
+            selectinload(Program.requirements),
+            selectinload(Program.features),
+            selectinload(Program.decisions),
+        )
+        .where(Program.id == report.program_id)
+    ).one_or_none()
+
+    return templates.TemplateResponse(
+        request,
+        "status_report_detail.html",
+        {
+            "report": report,
+            "program": program,
+            "HEALTH_STATE_CSS": HEALTH_STATE_CSS,
+            "STATUS_REPORT_HEALTHS": STATUS_REPORT_HEALTHS,
+        },
+    )
+
+
+@router.post("/status-reports/{report_id}/recalculate-health", include_in_schema=False)
+def recalculate_status_report_health(
+    report_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    report = db.get(StatusReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
+
+    program = db.scalars(
+        select(Program)
+        .options(
+            selectinload(Program.work_items),
+            selectinload(Program.dependencies),
+            selectinload(Program.risks),
+        )
+        .where(Program.id == report.program_id)
+    ).one_or_none()
+
+    report.suggested_health = compute_suggested_health(program)
+    db.add(report)
+    db.commit()
+    return RedirectResponse(f"/status-reports/{report_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
 @router.post("/programs/{program_id}/status-reports/create", include_in_schema=False)
 async def create_status_report_from_ui(
     program_id: int,
@@ -1277,7 +1338,8 @@ async def create_status_report_from_ui(
     )
     db.add(report)
     db.commit()
-    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+    db.refresh(report)
+    return RedirectResponse(f"/status-reports/{report.id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/status-reports/{report_id}/update", include_in_schema=False)
@@ -1302,6 +1364,8 @@ async def update_status_report_from_ui(
     report.summary = parsed.get("summary", "").strip() or None
     db.add(report)
     db.commit()
+    if parsed.get("return_to") == "detail":
+        return RedirectResponse(f"/status-reports/{report_id}/view", status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(f"/programs/{report.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 
 

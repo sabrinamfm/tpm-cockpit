@@ -105,7 +105,7 @@
         </tr>
         {% else %}
         <tr{% if loop.first %} style="background:#f8fafc;"{% endif %}>
-          <td>{% if report.display_id %}<span class="display-id">{{ report.display_id }}</span><br>{% endif %}{{ report.report_date | format_date }}{% if loop.first %}<br><span class="muted" style="font-size:11px;">latest</span>{% endif %}</td>
+          <td><a href="/status-reports/{{ report.id }}/view">{% if report.display_id %}<span class="display-id">{{ report.display_id }}</span><br>{% endif %}{{ report.report_date | format_date }}</a>{% if loop.first %}<br><span class="muted" style="font-size:11px;">latest</span>{% endif %}</td>
           <td><span class="pill {{ HEALTH_STATE_CSS[report.reported_health] }}">{{ report.reported_health | replace('_', ' ') | title }}</span></td>
           <td class="muted">
             {{ report.suggested_health | replace('_', ' ') | title }}
