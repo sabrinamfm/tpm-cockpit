@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.routes.decisions import router as decisions_router
 from app.api.routes.dependencies import router as dependencies_router
 from app.api.routes.health import router as health_router
 from app.api.routes.milestones import router as milestones_router
@@ -16,6 +17,7 @@ from app.api.routes.work_items import router as work_items_router
 def create_app() -> FastAPI:
     app = FastAPI(title="TPM Cockpit", version="0.1.0")
     app.include_router(ui_router)
+    app.include_router(decisions_router)
     app.include_router(health_router)
     app.include_router(milestones_router)
     app.include_router(program_statuses_router)

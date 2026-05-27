@@ -24,7 +24,7 @@ from app.domain.queries import (
     get_stale_risks,
     get_stale_work_items,
 )
-from app.models import Dependency, Milestone, Program, ProgramStatus, Relationship, Risk, SourceType, StatusReport, WorkItem
+from app.models import Decision, Dependency, Milestone, Program, ProgramStatus, Relationship, Risk, SourceType, StatusReport, WorkItem
 from app.models.program_status import seed_default_program_statuses
 from app.schemas.program_status import ProgramStatusCreate, ProgramStatusUpdate
 
@@ -79,6 +79,15 @@ MILESTONE_SORT_LABELS = {
     "status": "Status",
     "updated_at": "Updated",
 }
+DECISION_STATUSES = ("proposed", "decided", "deferred", "superseded", "cancelled")
+DECISION_STATUS_RANK = {
+    "proposed": 0, "deferred": 1, "decided": 2, "superseded": 3, "cancelled": 4,
+}
+DECISION_SORT_LABELS = {
+    "decision_date": "Decision Date",
+    "status": "Status",
+    "updated_at": "Updated",
+}
 RELATIONSHIP_TYPES = (
     "relates_to",
     "blocks",
@@ -95,6 +104,7 @@ _RELATIONSHIP_OBJECT_MODEL_MAP = {
     "risk": Risk,
     "status_report": StatusReport,
     "milestone": Milestone,
+    "decision": Decision,
 }
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
@@ -145,6 +155,8 @@ templates.env.globals.update(
         "RELATIONSHIP_TYPES": RELATIONSHIP_TYPES,
         "MILESTONE_STATUSES": MILESTONE_STATUSES,
         "MILESTONE_SORT_LABELS": MILESTONE_SORT_LABELS,
+        "DECISION_STATUSES": DECISION_STATUSES,
+        "DECISION_SORT_LABELS": DECISION_SORT_LABELS,
     }
 )
 templates.env.filters.update(
@@ -382,6 +394,14 @@ def _risk_sort_key(risk: Risk, sort: str):
     return (risk.updated_at, risk.id)
 
 
+def _decision_sort_key(decision: Decision, sort: str):
+    if sort == "decision_date":
+        return (decision.decision_date or date.max, decision.id)
+    if sort == "status":
+        return (DECISION_STATUS_RANK.get(decision.status, 99), decision.id)
+    return (decision.updated_at, decision.id)
+
+
 def _milestone_sort_key(milestone: Milestone, sort: str):
     if sort == "target_date":
         return (milestone.target_date or date.max, milestone.id)
@@ -426,6 +446,10 @@ def program_detail(
     show_new_milestone: Optional[str] = None,
     milestone_error: Optional[str] = None,
     edit_milestone_id: Optional[int] = None,
+    decision_sort: str = "decision_date",
+    show_new_decision: Optional[str] = None,
+    decision_error: Optional[str] = None,
+    edit_decision_id: Optional[int] = None,
     show_new_relationship: Optional[str] = None,
     relationship_error: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -438,6 +462,7 @@ def program_detail(
             selectinload(Program.risks),
             selectinload(Program.status_reports),
             selectinload(Program.milestones),
+            selectinload(Program.decisions),
         )
         .where(Program.id == program_id)
     ).one_or_none()
@@ -473,6 +498,8 @@ def program_detail(
         risk_sort = "updated_at"
     if milestone_sort not in MILESTONE_SORT_LABELS:
         milestone_sort = "target_date"
+    if decision_sort not in DECISION_SORT_LABELS:
+        decision_sort = "decision_date"
 
     work_items = list(program.work_items)
     if work_status_filter:
@@ -561,6 +588,17 @@ def program_detail(
     if edit_milestone_id is not None:
         edit_milestone = next((m for m in program.milestones if m.id == edit_milestone_id), None)
 
+    decisions = sorted(
+        program.decisions,
+        key=lambda d: _decision_sort_key(d, decision_sort),
+        reverse=decision_sort == "updated_at",
+    )
+    edit_decision = None
+    if edit_decision_id is not None:
+        edit_decision = next((d for d in program.decisions if d.id == edit_decision_id), None)
+
+    decision_owners = sorted({d.owner for d in program.decisions if d.owner})
+
     # Build lookup and load relationships for all objects in this program
     rel_object_lookup: dict[str, dict] = {}
     all_program_objects: list[dict] = []
@@ -584,6 +622,10 @@ def program_detail(
         info = {"type": "milestone", "id": ms.id, "display_id": ms.display_id, "title": ms.title}
         rel_object_lookup[f"milestone:{ms.id}"] = info
         all_program_objects.append(info)
+    for dec in program.decisions:
+        info = {"type": "decision", "id": dec.id, "display_id": dec.display_id, "title": dec.title}
+        rel_object_lookup[f"decision:{dec.id}"] = info
+        all_program_objects.append(info)
 
     rel_conditions = []
     for type_name, ids in [
@@ -592,6 +634,7 @@ def program_detail(
         ("risk", [r.id for r in program.risks]),
         ("status_report", [sr.id for sr in program.status_reports]),
         ("milestone", [ms.id for ms in program.milestones]),
+        ("decision", [dec.id for dec in program.decisions]),
     ]:
         if ids:
             rel_conditions.extend([
@@ -656,6 +699,12 @@ def program_detail(
             "show_new_milestone": show_new_milestone,
             "milestone_error": milestone_error,
             "edit_milestone": edit_milestone,
+            "decisions": decisions,
+            "decision_sort": decision_sort,
+            "show_new_decision": show_new_decision,
+            "decision_error": decision_error,
+            "edit_decision": edit_decision,
+            "decision_owners": decision_owners,
             "relationships": relationships,
             "rel_object_lookup": rel_object_lookup,
             "all_program_objects": all_program_objects,
@@ -1250,6 +1299,108 @@ def delete_milestone_from_ui(milestone_id: int, db: Session = Depends(get_db)) -
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
     program_id = milestone.program_id
     db.delete(milestone)
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ── Decision UI handlers ──────────────────────────────────────────────────────
+
+@router.post("/programs/{program_id}/decisions/create", include_in_schema=False)
+async def create_decision_from_ui(
+    program_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if db.get(Program, program_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Program not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    decision_status = parsed.get("status", "proposed")
+    if not title or decision_status not in DECISION_STATUSES:
+        query = urlencode({"show_new_decision": "1", "decision_error": "Title and status are required."})
+        return RedirectResponse(
+            f"/programs/{program_id}/view?{query}#new-decision",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    db.add(Decision(
+        program_id=program_id,
+        title=title,
+        description=parsed.get("description", "").strip() or None,
+        decision_date=_parse_due_date(parsed.get("decision_date", "")),
+        status=decision_status,
+        owner=parsed.get("owner", "").strip() or None,
+        rationale=parsed.get("rationale", "").strip() or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/decisions/{decision_id}/update", include_in_schema=False)
+async def update_decision_from_ui(
+    decision_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    decision = db.get(Decision, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
+
+    parsed = await _parse_form(request)
+    title = parsed.get("title", "").strip()
+    decision_status = parsed.get("status", decision.status)
+    if title and decision_status in DECISION_STATUSES:
+        decision.title = title
+        decision.description = parsed.get("description", "").strip() or None
+        decision.decision_date = _parse_due_date(parsed.get("decision_date", ""))
+        decision.status = decision_status
+        decision.owner = parsed.get("owner", "").strip() or None
+        decision.rationale = parsed.get("rationale", "").strip() or None
+        db.add(decision)
+        db.commit()
+    return RedirectResponse(f"/programs/{decision.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/decisions/{decision_id}/decide-ui", include_in_schema=False)
+def decide_decision_from_ui(decision_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    decision = db.get(Decision, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
+    decision.status = "decided"
+    db.add(decision)
+    db.commit()
+    return RedirectResponse(f"/programs/{decision.program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/decisions/{decision_id}/delete/confirm", response_class=HTMLResponse, include_in_schema=False)
+def confirm_delete_decision_page(
+    request: Request, decision_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    decision = db.get(Decision, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "page_title": "Delete Decision?",
+            "subtitle": decision.title,
+            "back_url": f"/programs/{decision.program_id}/view",
+            "back_label": "Back to Program",
+            "message": "This removes the Decision from the Program.",
+            "action_url": f"/decisions/{decision.id}/delete",
+            "cancel_url": f"/programs/{decision.program_id}/view",
+        },
+    )
+
+
+@router.post("/decisions/{decision_id}/delete", include_in_schema=False)
+def delete_decision_from_ui(decision_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    decision = db.get(Decision, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
+    program_id = decision.program_id
+    db.delete(decision)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
 

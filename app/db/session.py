@@ -13,6 +13,7 @@ _DISPLAY_ID_PREFIXES: dict[str, str] = {
     "status_reports": "SR",
     "relationships": "REL",
     "milestones": "MS",
+    "decisions": "DEC",
 }
 
 

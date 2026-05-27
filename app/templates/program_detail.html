@@ -254,6 +254,137 @@
 </section>
 
 <section class="panel">
+  <h2>Decisions</h2>
+
+  <details id="new-decision" class="collapsible-panel"{% if show_new_decision == "1" or decision_error %} open{% endif %}>
+    <summary class="button">New Decision</summary>
+    <div class="collapsible-body">
+      {% if decision_error %}<div class="error">{{ decision_error }}</div>{% endif %}
+      <form method="post" action="/programs/{{ program.id }}/decisions/create">
+        <label for="decision-title">Title</label>
+        <input id="decision-title" name="title" required maxlength="200">
+        <label for="decision-description">Description</label>
+        <textarea id="decision-description" name="description"></textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="decision-status">Status</label>
+            <select id="decision-status" name="status">
+              {% for ds in DECISION_STATUSES %}
+                <option value="{{ ds }}"{% if ds == "proposed" %} selected{% endif %}>{{ ds | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="decision-date">Decision Date</label>
+            <input id="decision-date" name="decision_date" type="date">
+          </div>
+          <div>
+            <label for="decision-owner">Owner</label>
+            <input id="decision-owner" name="owner" maxlength="120">
+          </div>
+        </div>
+        <label for="decision-rationale">Rationale</label>
+        <textarea id="decision-rationale" name="rationale"></textarea>
+        <div class="actions">
+          <button type="submit">Create Decision</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  {% if edit_decision %}
+  <details id="edit-decision" class="collapsible-panel" open>
+    <summary class="button secondary">Edit Decision</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/decisions/{{ edit_decision.id }}/update">
+        <label for="edit-decision-title">Title</label>
+        <input id="edit-decision-title" name="title" required maxlength="200" value="{{ edit_decision.title }}">
+        <label for="edit-decision-description">Description</label>
+        <textarea id="edit-decision-description" name="description">{{ edit_decision.description or "" }}</textarea>
+        <div class="compact-fields">
+          <div>
+            <label for="edit-decision-status">Status</label>
+            <select id="edit-decision-status" name="status">
+              {% for ds in DECISION_STATUSES %}
+                <option value="{{ ds }}"{% if ds == edit_decision.status %} selected{% endif %}>{{ ds | replace('_', ' ') | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="edit-decision-date">Decision Date</label>
+            <input id="edit-decision-date" name="decision_date" type="date" value="{{ edit_decision.decision_date | format_date }}">
+          </div>
+          <div>
+            <label for="edit-decision-owner">Owner</label>
+            <input id="edit-decision-owner" name="owner" maxlength="120" value="{{ edit_decision.owner or "" }}">
+          </div>
+        </div>
+        <label for="edit-decision-rationale">Rationale</label>
+        <textarea id="edit-decision-rationale" name="rationale">{{ edit_decision.rationale or "" }}</textarea>
+        <div class="actions">
+          <button type="submit">Save Decision</button>
+          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+  <form class="filters" method="get" action="/programs/{{ program.id }}/view">
+    <div>
+      <label for="decision_sort">Sort</label>
+      <select id="decision_sort" name="decision_sort">
+        {% for value, label in DECISION_SORT_LABELS.items() %}
+          <option value="{{ value }}"{% if value == decision_sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/programs/{{ program.id }}/view">Clear</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Decision Date</th>
+        <th>Owner</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for decision in decisions %}
+        <tr>
+          <td>{% if decision.display_id %}<span class="display-id">{{ decision.display_id }}</span>{% endif %}{{ decision.title }}</td>
+          <td><span class="pill">{{ decision.status | replace('_', ' ') | title }}</span></td>
+          <td>{{ decision.decision_date | format_date }}</td>
+          <td>{{ decision.owner or "" }}</td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/view?edit_decision_id={{ decision.id }}#edit-decision">Edit</a>
+                <form method="post" action="/decisions/{{ decision.id }}/decide-ui">
+                  <button type="submit">Mark Decided</button>
+                </form>
+                <a href="/decisions/{{ decision.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" class="muted">No decisions yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <h2>Work Items</h2>
   </div>

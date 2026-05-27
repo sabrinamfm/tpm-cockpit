@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.decision import Decision
     from app.models.milestone import Milestone
     from app.models.program_status import ProgramStatus
     from app.models.status_report import StatusReport
@@ -62,6 +63,11 @@ class Program(Base):
     )
     milestones: Mapped[list["Milestone"]] = relationship(
         "Milestone",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
+    decisions: Mapped[list["Decision"]] = relationship(
+        "Decision",
         back_populates="program",
         cascade="all, delete-orphan",
     )
