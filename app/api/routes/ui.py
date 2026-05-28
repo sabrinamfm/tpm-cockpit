@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.domain.attention import dependency_is_stale, risk_is_critical, risk_is_stale, work_item_is_overdue, work_item_is_stale
+from app.domain.object_registry import OBJECT_REGISTRY, VALID_OBJECT_TYPES
 from app.domain.health import compute_suggested_health, program_health_evidence, program_health_state
 from app.domain.queries import (
     get_blocked_dependencies,
@@ -128,16 +129,6 @@ RELATIONSHIP_TYPES = (
     "duplicates",
     "depends_on",
 )
-_RELATIONSHIP_OBJECT_MODEL_MAP = {
-    "work_item": WorkItem,
-    "dependency": Dependency,
-    "risk": Risk,
-    "status_report": StatusReport,
-    "milestone": Milestone,
-    "decision": Decision,
-    "requirement": Requirement,
-    "feature": Feature,
-}
 PROGRAM_SORTS = {
     "name": Program.name.asc(),
     "updated_at": Program.updated_at.desc(),
@@ -1839,7 +1830,6 @@ def delete_feature_from_ui(feature_id: int, db: Session = Depends(get_db)) -> Re
 
 # ── Relationship UI handlers ──────────────────────────────────────────────────
 
-_VALID_OBJECT_TYPES = frozenset(_RELATIONSHIP_OBJECT_MODEL_MAP.keys())
 
 
 @router.post("/programs/{program_id}/relationships/create", include_in_schema=False)
@@ -1868,7 +1858,7 @@ async def create_relationship_from_ui(
         return _error("Source and target are required.")
     source_type, _, source_id_str = source_ref.partition(":")
     target_type, _, target_id_str = target_ref.partition(":")
-    if source_type not in _VALID_OBJECT_TYPES or target_type not in _VALID_OBJECT_TYPES:
+    if source_type not in VALID_OBJECT_TYPES or target_type not in VALID_OBJECT_TYPES:
         return _error("Invalid object type.")
     if relationship_type not in RELATIONSHIP_TYPES:
         return _error("Invalid relationship type.")
@@ -1879,8 +1869,8 @@ async def create_relationship_from_ui(
         return _error("Invalid object reference.")
     if source_type == target_type and source_id == target_id:
         return _error("Source and target cannot be the same object.")
-    source_model = _RELATIONSHIP_OBJECT_MODEL_MAP[source_type]
-    target_model = _RELATIONSHIP_OBJECT_MODEL_MAP[target_type]
+    source_model = OBJECT_REGISTRY[source_type]
+    target_model = OBJECT_REGISTRY[target_type]
     if db.get(source_model, source_id) is None:
         return _error("Source object not found.")
     if db.get(target_model, target_id) is None:

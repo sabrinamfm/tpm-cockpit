@@ -5,30 +5,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.object_registry import lookup_object
 from app.models import Decision, Dependency, Feature, Milestone, Program, Requirement, Risk, WorkItem
 from app.models.relationship import Relationship
 from app.models.status_report import StatusReport
 from app.schemas.relationship import RelationshipCreate, RelationshipRead
 
 router = APIRouter(tags=["relationships"])
-
-_OBJECT_MODEL_MAP = {
-    "work_item": WorkItem,
-    "dependency": Dependency,
-    "risk": Risk,
-    "status_report": StatusReport,
-    "milestone": Milestone,
-    "decision": Decision,
-    "requirement": Requirement,
-    "feature": Feature,
-}
-
-
-def _lookup_object(db: Session, object_type: str, object_id: int):
-    model = _OBJECT_MODEL_MAP.get(object_type)
-    if model is None:
-        return None
-    return db.get(model, object_id)
 
 
 @router.post(
@@ -40,12 +23,12 @@ def create_relationship(
     rel_in: RelationshipCreate,
     db: Session = Depends(get_db),
 ) -> Relationship:
-    if _lookup_object(db, rel_in.source_type, rel_in.source_id) is None:
+    if lookup_object(db, rel_in.source_type, rel_in.source_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"{rel_in.source_type} {rel_in.source_id} not found",
         )
-    if _lookup_object(db, rel_in.target_type, rel_in.target_id) is None:
+    if lookup_object(db, rel_in.target_type, rel_in.target_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"{rel_in.target_type} {rel_in.target_id} not found",
