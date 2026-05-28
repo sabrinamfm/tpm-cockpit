@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.object_registry import delete_relationships_for_object
 from app.models import Feature, Program
 from app.schemas.feature import FeatureCreate, FeatureRead, FeatureUpdate
 
@@ -73,6 +74,7 @@ def delete_feature(feature_id: int, db: Session = Depends(get_db)) -> Response:
     feature = db.get(Feature, feature_id)
     if feature is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found")
+    delete_relationships_for_object(db, "feature", feature_id)
     db.delete(feature)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

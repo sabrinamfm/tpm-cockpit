@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.object_registry import delete_relationships_for_object
 from app.models import Dependency, Program
 from app.schemas.dependency import DependencyCreate, DependencyRead, DependencyUpdate
 
@@ -93,6 +94,7 @@ def delete_dependency(dependency_id: int, db: Session = Depends(get_db)) -> Resp
     if dependency is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dependency not found")
 
+    delete_relationships_for_object(db, "dependency", dependency_id)
     db.delete(dependency)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.domain.health import compute_suggested_health
+from app.domain.object_registry import delete_relationships_for_object
 from app.models import Program, StatusReport
 from app.models.dependency import Dependency
 from app.models.risk import Risk
@@ -101,6 +102,7 @@ def delete_status_report(report_id: int, db: Session = Depends(get_db)) -> Respo
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
 
+    delete_relationships_for_object(db, "status_report", report_id)
     db.delete(report)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

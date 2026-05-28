@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.object_registry import delete_relationships_for_object
 from app.models import Program, Requirement
 from app.schemas.requirement import RequirementCreate, RequirementRead, RequirementUpdate
 
@@ -73,6 +74,7 @@ def delete_requirement(requirement_id: int, db: Session = Depends(get_db)) -> Re
     requirement = db.get(Requirement, requirement_id)
     if requirement is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+    delete_relationships_for_object(db, "requirement", requirement_id)
     db.delete(requirement)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

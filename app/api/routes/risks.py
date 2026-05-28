@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.object_registry import delete_relationships_for_object
 from app.models import Program, Risk
 from app.schemas.risk import RiskCreate, RiskRead, RiskUpdate
 
@@ -92,6 +93,7 @@ def delete_risk(risk_id: int, db: Session = Depends(get_db)) -> Response:
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
 
+    delete_relationships_for_object(db, "risk", risk_id)
     db.delete(risk)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

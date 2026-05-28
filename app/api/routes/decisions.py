@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.object_registry import delete_relationships_for_object
 from app.models import Decision, Program
 from app.schemas.decision import DecisionCreate, DecisionRead, DecisionUpdate
 
@@ -73,6 +74,7 @@ def delete_decision(decision_id: int, db: Session = Depends(get_db)) -> Response
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
+    delete_relationships_for_object(db, "decision", decision_id)
     db.delete(decision)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

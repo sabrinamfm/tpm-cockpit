@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.domain.attention import dependency_is_stale, risk_is_critical, risk_is_stale, work_item_is_overdue, work_item_is_stale
-from app.domain.object_registry import OBJECT_REGISTRY, VALID_OBJECT_TYPES
+from app.domain.object_registry import OBJECT_REGISTRY, VALID_OBJECT_TYPES, delete_relationships_for_object
 from app.domain.health import compute_suggested_health, program_health_evidence, program_health_state
 from app.domain.queries import (
     get_blocked_dependencies,
@@ -959,6 +959,7 @@ def delete_work_item_from_ui(work_item_id: int, db: Session = Depends(get_db)) -
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
 
     program_id = work_item.program_id
+    delete_relationships_for_object(db, "work_item", work_item_id)
     db.delete(work_item)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1094,6 +1095,7 @@ def delete_dependency_from_ui(dependency_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dependency not found")
 
     program_id = dependency.program_id
+    delete_relationships_for_object(db, "dependency", dependency_id)
     db.delete(dependency)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1227,6 +1229,7 @@ def delete_risk_from_ui(risk_id: int, db: Session = Depends(get_db)) -> Redirect
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
 
     program_id = risk.program_id
+    delete_relationships_for_object(db, "risk", risk_id)
     db.delete(risk)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1403,6 +1406,7 @@ def delete_status_report_from_ui(report_id: int, db: Session = Depends(get_db)) 
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status report not found")
     program_id = report.program_id
+    delete_relationships_for_object(db, "status_report", report_id)
     db.delete(report)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1504,6 +1508,7 @@ def delete_milestone_from_ui(milestone_id: int, db: Session = Depends(get_db)) -
     if milestone is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
     program_id = milestone.program_id
+    delete_relationships_for_object(db, "milestone", milestone_id)
     db.delete(milestone)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1609,6 +1614,7 @@ def delete_decision_from_ui(decision_id: int, db: Session = Depends(get_db)) -> 
     if decision is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found")
     program_id = decision.program_id
+    delete_relationships_for_object(db, "decision", decision_id)
     db.delete(decision)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1718,6 +1724,7 @@ def delete_requirement_from_ui(requirement_id: int, db: Session = Depends(get_db
     if requirement is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
     program_id = requirement.program_id
+    delete_relationships_for_object(db, "requirement", requirement_id)
     db.delete(requirement)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1823,6 +1830,7 @@ def delete_feature_from_ui(feature_id: int, db: Session = Depends(get_db)) -> Re
     if feature is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found")
     program_id = feature.program_id
+    delete_relationships_for_object(db, "feature", feature_id)
     db.delete(feature)
     db.commit()
     return RedirectResponse(f"/programs/{program_id}/view", status_code=status.HTTP_303_SEE_OTHER)
