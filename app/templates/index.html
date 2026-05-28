@@ -11,115 +11,113 @@
     <a href="/docs">API docs</a>
   </div>
 </header>
-<div class="layout">
-  <section class="panel">
-    <h2>New Program</h2>
-    <form method="post" action="/programs/create">
-      <label for="name">Name</label>
-      <input id="name" name="name" required maxlength="200">
-      <label for="description">Description</label>
-      <textarea id="description" name="description"></textarea>
-      <label for="launch_date">Launch Date</label>
-      <input id="launch_date" name="launch_date" type="date">
-      <label for="status">Status</label>
-      <select id="status" name="status">
-        {% for ps in all_statuses %}
-          {% if ps.is_active %}
-            <option value="{{ ps.slug }}">{{ ps.name }}</option>
-          {% endif %}
-        {% endfor %}
-      </select>
-      <div class="actions">
-        <button type="submit">Create Program</button>
-      </div>
-    </form>
-  </section>
-  <section class="panel">
-    <h2>Program List</h2>
-    <form class="filters" method="get" action="/">
-      <div>
-        <label for="status_filter">Status</label>
-        <select id="status_filter" name="status_filter">
-          <option value="">All statuses</option>
+<section class="panel">
+  <h2>Programs</h2>
+  <details id="new-program" class="collapsible-panel">
+    <summary class="button">Add New Program</summary>
+    <div class="collapsible-body">
+      <form method="post" action="/programs/create">
+        <label for="name">Name</label>
+        <input id="name" name="name" required maxlength="200">
+        <label for="description">Description</label>
+        <textarea id="description" name="description"></textarea>
+        <label for="launch_date">Launch Date</label>
+        <input id="launch_date" name="launch_date" type="date">
+        <label for="status">Status</label>
+        <select id="status" name="status">
           {% for ps in all_statuses %}
-            {% if ps.is_active or ps.slug == status_filter %}
-              <option value="{{ ps.slug }}"{% if ps.slug == status_filter %} selected{% endif %}>
-                {{ ps.name }}{% if not ps.is_active %} (inactive){% endif %}
-              </option>
+            {% if ps.is_active %}
+              <option value="{{ ps.slug }}">{{ ps.name }}</option>
             {% endif %}
           {% endfor %}
         </select>
-      </div>
-      <div>
-        <label for="health_filter">Health</label>
-        <select id="health_filter" name="health_filter">
-          <option value="">All health states</option>
-          {% for h in HEALTH_STATES %}
-            <option value="{{ h }}"{% if h == health_filter %} selected{% endif %}>{{ h | replace('_', ' ') | title }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="sort">Sort</label>
-        <select id="sort" name="sort">
-          {% for value, label in [("updated_at", "Recently updated"), ("name", "Name"), ("status", "Status")] %}
-            <option value="{{ value }}"{% if value == sort %} selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="actions">
-        <button type="submit">Apply</button>
-        <a class="button secondary" href="/">Clear</a>
-      </div>
-    </form>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Status</th>
-          <th>Health</th>
-          <th>Launch</th>
-          <th>Report</th>
-          <th>Updated</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for program in programs %}
-          {% set health = program_health_state(program) %}
-          <tr>
-            <td>{% if program.display_id %}<span class="display-id">{{ program.display_id }}</span>{% endif %}<a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
-            <td>{{ program.description or "" }}</td>
-            <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
-            <td><span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span></td>
-            <td>{{ program.launch_date | format_date }}</td>
-            <td>
-              {% set latest_report = latest_reports.get(program.id) %}
-              {% if latest_report %}
-                <a href="/status-reports/{{ latest_report.id }}/view" class="pill {{ HEALTH_STATE_CSS[latest_report.reported_health] }}" style="text-decoration:none;" title="{{ latest_report.report_title or latest_report.display_id }}">{{ latest_report.reported_health | replace('_', ' ') | title }}</a>
-              {% else %}
-                <span class="muted">No report yet</span>
-              {% endif %}
-            </td>
-            <td>{{ program.updated_at | format_datetime }}</td>
-            <td class="row-actions">
-              <details class="action-menu">
-                <summary class="button secondary">Actions</summary>
-                <div class="menu">
-                  <a href="/programs/{{ program.id }}/edit">Edit</a>
-                  <a href="/programs/{{ program.id }}/delete/confirm">Delete</a>
-                </div>
-              </details>
-            </td>
-          </tr>
-        {% else %}
-          <tr>
-            <td colspan="8" class="muted">No programs match the current view.</td>
-          </tr>
+        <div class="actions">
+          <button type="submit">Create Program</button>
+        </div>
+      </form>
+    </div>
+  </details>
+  <form class="filters" method="get" action="/">
+    <div>
+      <label for="status_filter">Status</label>
+      <select id="status_filter" name="status_filter">
+        <option value="">All statuses</option>
+        {% for ps in all_statuses %}
+          {% if ps.is_active or ps.slug == status_filter %}
+            <option value="{{ ps.slug }}"{% if ps.slug == status_filter %} selected{% endif %}>
+              {{ ps.name }}{% if not ps.is_active %} (inactive){% endif %}
+            </option>
+          {% endif %}
         {% endfor %}
-      </tbody>
-    </table>
-  </section>
-</div>
+      </select>
+    </div>
+    <div>
+      <label for="health_filter">Health</label>
+      <select id="health_filter" name="health_filter">
+        <option value="">All health states</option>
+        {% for h in HEALTH_STATES %}
+          <option value="{{ h }}"{% if h == health_filter %} selected{% endif %}>{{ h | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="sort">Sort</label>
+      <select id="sort" name="sort">
+        {% for value, label in [("updated_at", "Recently updated"), ("name", "Name"), ("status", "Status")] %}
+          <option value="{{ value }}"{% if value == sort %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="/">Clear</a>
+    </div>
+  </form>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Description</th>
+        <th>Status</th>
+        <th>Health</th>
+        <th>Launch</th>
+        <th>Report</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for program in programs %}
+        {% set health = program_health_state(program) %}
+        <tr>
+          <td>{% if program.display_id %}<span class="display-id">{{ program.display_id }}</span>{% endif %}<a href="/programs/{{ program.id }}/view">{{ program.name }}</a></td>
+          <td>{{ program.description or "" }}</td>
+          <td><span class="pill" style="background:{{ program.program_status.color }}1a;color:{{ program.program_status.color }}">{{ program.program_status.name }}</span></td>
+          <td><span class="pill {{ HEALTH_STATE_CSS[health] }}">{{ health | replace('_', ' ') | title }}</span></td>
+          <td>{{ program.launch_date | format_date }}</td>
+          <td>
+            {% set latest_report = latest_reports.get(program.id) %}
+            {% if latest_report %}
+              <a href="/status-reports/{{ latest_report.id }}/view" class="pill {{ HEALTH_STATE_CSS[latest_report.reported_health] }}" style="text-decoration:none;" title="{{ latest_report.report_title or latest_report.display_id }}">{{ latest_report.reported_health | replace('_', ' ') | title }}</a>
+            {% else %}
+              <span class="muted">No report yet</span>
+            {% endif %}
+          </td>
+          <td class="row-actions">
+            <details class="action-menu">
+              <summary class="button secondary">Actions</summary>
+              <div class="menu">
+                <a href="/programs/{{ program.id }}/edit">Edit</a>
+                <a href="/programs/{{ program.id }}/delete/confirm">Delete</a>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" class="muted">No programs match the current view.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% endblock %}
