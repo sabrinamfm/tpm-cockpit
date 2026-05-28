@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.domain.health import compute_suggested_health
+from app.domain.health import compute_suggested_health, program_health_state
 from app.domain.object_registry import delete_relationships_for_object
 from app.models import Program, StatusReport
 from app.models.dependency import Dependency
@@ -47,6 +47,7 @@ def create_status_report(
         program_id=program_id,
         report_title=f"Week {week} {program.name} Report",
         suggested_health=compute_suggested_health(program),
+        suggested_state=program_health_state(program),
         **report_in.model_dump(),
     )
     db.add(report)

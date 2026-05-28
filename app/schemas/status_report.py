@@ -28,6 +28,7 @@ class StatusReportRead(BaseModel):
     report_date: date
     reported_health: str
     suggested_health: str
+    suggested_state: Optional[str]
     health_rationale: Optional[str]
     summary: Optional[str]
     created_at: datetime

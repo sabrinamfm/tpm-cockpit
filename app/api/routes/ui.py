@@ -1299,6 +1299,7 @@ def recalculate_status_report_health(
     ).one_or_none()
 
     report.suggested_health = compute_suggested_health(program)
+    report.suggested_state = program_health_state(program)
     db.add(report)
     db.commit()
     return RedirectResponse(f"/status-reports/{report_id}/view", status_code=status.HTTP_303_SEE_OTHER)
@@ -1344,6 +1345,7 @@ async def create_status_report_from_ui(
         report_title=f"Week {week} {program.name} Report",
         reported_health=reported_health,
         suggested_health=compute_suggested_health(program),
+        suggested_state=program_health_state(program),
         summary=parsed.get("summary", "").strip() or None,
     )
     db.add(report)

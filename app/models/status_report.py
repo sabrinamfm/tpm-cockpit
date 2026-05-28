@@ -18,6 +18,11 @@ class StatusReport(Base):
             "suggested_health in ('on_track', 'at_risk', 'off_track')",
             name="ck_status_reports_suggested_health_allowed",
         ),
+        CheckConstraint(
+            "suggested_state is null or suggested_state in "
+            "('inactive', 'on_track', 'needs_attention', 'at_risk', 'off_track')",
+            name="ck_status_reports_suggested_state_allowed",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -31,6 +36,7 @@ class StatusReport(Base):
     report_title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     reported_health: Mapped[str] = mapped_column(String(20), nullable=False)
     suggested_health: Mapped[str] = mapped_column(String(20), nullable=False)
+    suggested_state: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     health_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
