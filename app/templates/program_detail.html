@@ -32,40 +32,7 @@
 </section>
 
 <section class="panel">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <h2>Status Reports</h2>
-  </div>
-
-  <details id="new-report" class="collapsible-panel"{% if show_new_report == "1" or report_error %} open{% endif %}>
-    <summary class="button">New Status Report</summary>
-    <div class="collapsible-body">
-      {% if report_error %}<div class="error">{{ report_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/status-reports/create">
-        <div class="compact-fields">
-          <div>
-            <label for="report-date">Report Date</label>
-            <input id="report-date" name="report_date" type="date" value="{{ today }}" required>
-          </div>
-          <div>
-            <label for="report-health">Reported Health</label>
-            <select id="report-health" name="reported_health">
-              {% for h in STATUS_REPORT_HEALTHS %}
-                <option value="{{ h }}">{{ h | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <label for="report-rationale">Health Rationale</label>
-        <textarea id="report-rationale" name="health_rationale" placeholder="Rationale for the declared health, especially if it differs from the system suggestion."></textarea>
-        <label for="report-summary">Summary</label>
-        <textarea id="report-summary" name="summary" placeholder="Current state of the program."></textarea>
-        <div class="actions">
-          <button type="submit">Save Report</button>
-          <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
-        </div>
-      </form>
-    </div>
-  </details>
+  <h2>Status Reports</h2>
 
   {% if status_reports %}
   <table>
@@ -130,40 +97,42 @@
   {% else %}
   <p class="muted empty-state">No status reports yet.</p>
   {% endif %}
+  <div class="section-action">
+    <details id="new-report"{% if show_new_report == "1" or report_error %} open{% endif %}>
+      <summary class="button">New Status Report</summary>
+      <div class="section-action-form">
+        {% if report_error %}<div class="error">{{ report_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/status-reports/create">
+          <div class="compact-fields">
+            <div>
+              <label for="report-date">Report Date</label>
+              <input id="report-date" name="report_date" type="date" value="{{ today }}" required>
+            </div>
+            <div>
+              <label for="report-health">Reported Health</label>
+              <select id="report-health" name="reported_health">
+                {% for h in STATUS_REPORT_HEALTHS %}
+                  <option value="{{ h }}">{{ h | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <label for="report-rationale">Health Rationale</label>
+          <textarea id="report-rationale" name="health_rationale" placeholder="Rationale for the declared health, especially if it differs from the system suggestion."></textarea>
+          <label for="report-summary">Summary</label>
+          <textarea id="report-summary" name="summary" placeholder="Current state of the program."></textarea>
+          <div class="actions">
+            <button type="submit">Save Report</button>
+            <a class="button secondary" href="/programs/{{ program.id }}/view">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
   <h2>Milestones</h2>
-
-  <details id="new-milestone" class="collapsible-panel"{% if show_new_milestone == "1" or milestone_error %} open{% endif %}>
-    <summary class="button">New Milestone</summary>
-    <div class="collapsible-body">
-      {% if milestone_error %}<div class="error">{{ milestone_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/milestones/create">
-        <label for="milestone-title">Title</label>
-        <input id="milestone-title" name="title" required maxlength="200">
-        <label for="milestone-description">Description</label>
-        <textarea id="milestone-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="milestone-status">Status</label>
-            <select id="milestone-status" name="status">
-              {% for ms in MILESTONE_STATUSES %}
-                <option value="{{ ms }}"{% if ms == "planned" %} selected{% endif %}>{{ ms | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="milestone-target-date">Target Date</label>
-            <input id="milestone-target-date" name="target_date" type="date">
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">Create Milestone</button>
-        </div>
-      </form>
-    </div>
-  </details>
 
   {% if edit_milestone %}
   <details id="edit-milestone" class="collapsible-panel" open>
@@ -248,46 +217,41 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-milestone"{% if show_new_milestone == "1" or milestone_error %} open{% endif %}>
+      <summary class="button">New Milestone</summary>
+      <div class="section-action-form">
+        {% if milestone_error %}<div class="error">{{ milestone_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/milestones/create">
+          <label for="milestone-title">Title</label>
+          <input id="milestone-title" name="title" required maxlength="200">
+          <label for="milestone-description">Description</label>
+          <textarea id="milestone-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="milestone-status">Status</label>
+              <select id="milestone-status" name="status">
+                {% for ms in MILESTONE_STATUSES %}
+                  <option value="{{ ms }}"{% if ms == "planned" %} selected{% endif %}>{{ ms | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="milestone-target-date">Target Date</label>
+              <input id="milestone-target-date" name="target_date" type="date">
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit">Create Milestone</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
   <h2>Decisions</h2>
-
-  <details id="new-decision" class="collapsible-panel"{% if show_new_decision == "1" or decision_error %} open{% endif %}>
-    <summary class="button">New Decision</summary>
-    <div class="collapsible-body">
-      {% if decision_error %}<div class="error">{{ decision_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/decisions/create">
-        <label for="decision-title">Title</label>
-        <input id="decision-title" name="title" required maxlength="200">
-        <label for="decision-description">Description</label>
-        <textarea id="decision-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="decision-status">Status</label>
-            <select id="decision-status" name="status">
-              {% for ds in DECISION_STATUSES %}
-                <option value="{{ ds }}"{% if ds == "proposed" %} selected{% endif %}>{{ ds | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="decision-date">Decision Date</label>
-            <input id="decision-date" name="decision_date" type="date">
-          </div>
-          <div>
-            <label for="decision-owner">Owner</label>
-            <input id="decision-owner" name="owner" maxlength="120">
-          </div>
-        </div>
-        <label for="decision-rationale">Rationale</label>
-        <textarea id="decision-rationale" name="rationale"></textarea>
-        <div class="actions">
-          <button type="submit">Create Decision</button>
-        </div>
-      </form>
-    </div>
-  </details>
 
   {% if edit_decision %}
   <details id="edit-decision" class="collapsible-panel" open>
@@ -380,54 +344,47 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-decision"{% if show_new_decision == "1" or decision_error %} open{% endif %}>
+      <summary class="button">New Decision</summary>
+      <div class="section-action-form">
+        {% if decision_error %}<div class="error">{{ decision_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/decisions/create">
+          <label for="decision-title">Title</label>
+          <input id="decision-title" name="title" required maxlength="200">
+          <label for="decision-description">Description</label>
+          <textarea id="decision-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="decision-status">Status</label>
+              <select id="decision-status" name="status">
+                {% for ds in DECISION_STATUSES %}
+                  <option value="{{ ds }}"{% if ds == "proposed" %} selected{% endif %}>{{ ds | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="decision-date">Decision Date</label>
+              <input id="decision-date" name="decision_date" type="date">
+            </div>
+            <div>
+              <label for="decision-owner">Owner</label>
+              <input id="decision-owner" name="owner" maxlength="120">
+            </div>
+          </div>
+          <label for="decision-rationale">Rationale</label>
+          <textarea id="decision-rationale" name="rationale"></textarea>
+          <div class="actions">
+            <button type="submit">Create Decision</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
   <h2>Requirements</h2>
-
-  <details id="new-requirement" class="collapsible-panel"{% if show_new_requirement == "1" or requirement_error %} open{% endif %}>
-    <summary class="button">New Requirement</summary>
-    <div class="collapsible-body">
-      {% if requirement_error %}<div class="error">{{ requirement_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/requirements/create">
-        <label for="req-title">Title</label>
-        <input id="req-title" name="title" required maxlength="200">
-        <label for="req-description">Description</label>
-        <textarea id="req-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="req-source-type">Source Type</label>
-            <select id="req-source-type" name="source_type">
-              {% for rst in REQUIREMENT_SOURCE_TYPES %}
-                <option value="{{ rst }}"{% if rst == "other" %} selected{% endif %}>{{ rst | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="req-status">Status</label>
-            <select id="req-status" name="status">
-              {% for rs in REQUIREMENT_STATUSES %}
-                <option value="{{ rs }}"{% if rs == "proposed" %} selected{% endif %}>{{ rs | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="req-owner">Owner</label>
-            <input id="req-owner" name="owner" maxlength="120">
-          </div>
-          <div>
-            <label for="req-target-date">Target Date</label>
-            <input id="req-target-date" name="target_date" type="date">
-          </div>
-        </div>
-        <label for="req-link">Link</label>
-        <input id="req-link" name="link" type="url" maxlength="500" placeholder="https://…">
-        <div class="actions">
-          <button type="submit">Create Requirement</button>
-        </div>
-      </form>
-    </div>
-  </details>
 
   {% if edit_requirement %}
   <details id="edit-requirement" class="collapsible-panel" open>
@@ -563,46 +520,55 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-requirement"{% if show_new_requirement == "1" or requirement_error %} open{% endif %}>
+      <summary class="button">New Requirement</summary>
+      <div class="section-action-form">
+        {% if requirement_error %}<div class="error">{{ requirement_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/requirements/create">
+          <label for="req-title">Title</label>
+          <input id="req-title" name="title" required maxlength="200">
+          <label for="req-description">Description</label>
+          <textarea id="req-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="req-source-type">Source Type</label>
+              <select id="req-source-type" name="source_type">
+                {% for rst in REQUIREMENT_SOURCE_TYPES %}
+                  <option value="{{ rst }}"{% if rst == "other" %} selected{% endif %}>{{ rst | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="req-status">Status</label>
+              <select id="req-status" name="status">
+                {% for rs in REQUIREMENT_STATUSES %}
+                  <option value="{{ rs }}"{% if rs == "proposed" %} selected{% endif %}>{{ rs | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="req-owner">Owner</label>
+              <input id="req-owner" name="owner" maxlength="120">
+            </div>
+            <div>
+              <label for="req-target-date">Target Date</label>
+              <input id="req-target-date" name="target_date" type="date">
+            </div>
+          </div>
+          <label for="req-link">Link</label>
+          <input id="req-link" name="link" type="url" maxlength="500" placeholder="https://…">
+          <div class="actions">
+            <button type="submit">Create Requirement</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
   <h2>Features</h2>
-
-  <details id="new-feature" class="collapsible-panel"{% if show_new_feature == "1" or feature_error %} open{% endif %}>
-    <summary class="button">New Feature</summary>
-    <div class="collapsible-body">
-      {% if feature_error %}<div class="error">{{ feature_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/features/create">
-        <label for="feature-title">Title</label>
-        <input id="feature-title" name="title" required maxlength="200">
-        <label for="feature-description">Description</label>
-        <textarea id="feature-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="feature-status">Status</label>
-            <select id="feature-status" name="status">
-              {% for fs in FEATURE_STATUSES %}
-                <option value="{{ fs }}"{% if fs == "proposed" %} selected{% endif %}>{{ fs | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="feature-owner">Owner</label>
-            <input id="feature-owner" name="owner" maxlength="120">
-          </div>
-          <div>
-            <label for="feature-target-date">Target Date</label>
-            <input id="feature-target-date" name="target_date" type="date">
-          </div>
-        </div>
-        <label for="feature-link">Link</label>
-        <input id="feature-link" name="link" type="url" maxlength="500" placeholder="https://…">
-        <div class="actions">
-          <button type="submit">Create Feature</button>
-        </div>
-      </form>
-    </div>
-  </details>
 
   {% if edit_feature %}
   <details id="edit-feature" class="collapsible-panel" open>
@@ -719,73 +685,47 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-feature"{% if show_new_feature == "1" or feature_error %} open{% endif %}>
+      <summary class="button">New Feature</summary>
+      <div class="section-action-form">
+        {% if feature_error %}<div class="error">{{ feature_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/features/create">
+          <label for="feature-title">Title</label>
+          <input id="feature-title" name="title" required maxlength="200">
+          <label for="feature-description">Description</label>
+          <textarea id="feature-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="feature-status">Status</label>
+              <select id="feature-status" name="status">
+                {% for fs in FEATURE_STATUSES %}
+                  <option value="{{ fs }}"{% if fs == "proposed" %} selected{% endif %}>{{ fs | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="feature-owner">Owner</label>
+              <input id="feature-owner" name="owner" maxlength="120">
+            </div>
+            <div>
+              <label for="feature-target-date">Target Date</label>
+              <input id="feature-target-date" name="target_date" type="date">
+            </div>
+          </div>
+          <label for="feature-link">Link</label>
+          <input id="feature-link" name="link" type="url" maxlength="500" placeholder="https://…">
+          <div class="actions">
+            <button type="submit">Create Feature</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <h2>Work Items</h2>
-  </div>
-
-  <details id="new-work-item" class="collapsible-panel"{% if show_new_work_item == "1" or work_item_error %} open{% endif %}>
-    <summary class="button">New Work Item</summary>
-    <div class="collapsible-body">
-      {% if work_item_error %}<div class="error">{{ work_item_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/work-items/create">
-        <label for="work-title">Title</label>
-        <input id="work-title" name="title" required maxlength="200">
-        <label for="work-description">Description</label>
-        <textarea id="work-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="work-status">Status</label>
-            <select id="work-status" name="status">
-              {% for ws in WORK_ITEM_STATUSES %}
-                <option value="{{ ws }}">{{ ws | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="work-priority">Priority</label>
-            <select id="work-priority" name="priority">
-              {% for p in WORK_ITEM_PRIORITIES %}
-                <option value="{{ p }}"{% if p == "medium" %} selected{% endif %}>{{ p | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="work-owner">Owner</label>
-            <input id="work-owner" name="owner" maxlength="120">
-          </div>
-          <div>
-            <label for="work-next-step">Next Step</label>
-            <input id="work-next-step" name="next_step">
-          </div>
-          <div>
-            <label for="work-source-type">Source Type</label>
-            <select id="work-source-type" name="source_type_id">
-              <option value="">No source</option>
-              {% for st in source_types %}
-                {% if st.is_active %}
-                  <option value="{{ st.id }}">{{ st.name }}</option>
-                {% endif %}
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="work-due-date">Due Date</label>
-            <input id="work-due-date" name="due_date" type="date">
-          </div>
-          <div>
-            <label for="work-link">Link</label>
-            <input id="work-link" name="link" maxlength="500">
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">Create Work Item</button>
-        </div>
-      </form>
-    </div>
-  </details>
+  <h2>Work Items</h2>
 
   {% if edit_work_item %}
   <details id="edit-work-item" class="collapsible-panel" open>
@@ -969,72 +909,72 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-work-item"{% if show_new_work_item == "1" or work_item_error %} open{% endif %}>
+      <summary class="button">New Work Item</summary>
+      <div class="section-action-form">
+        {% if work_item_error %}<div class="error">{{ work_item_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/work-items/create">
+          <label for="work-title">Title</label>
+          <input id="work-title" name="title" required maxlength="200">
+          <label for="work-description">Description</label>
+          <textarea id="work-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="work-status">Status</label>
+              <select id="work-status" name="status">
+                {% for ws in WORK_ITEM_STATUSES %}
+                  <option value="{{ ws }}">{{ ws | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="work-priority">Priority</label>
+              <select id="work-priority" name="priority">
+                {% for p in WORK_ITEM_PRIORITIES %}
+                  <option value="{{ p }}"{% if p == "medium" %} selected{% endif %}>{{ p | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="work-owner">Owner</label>
+              <input id="work-owner" name="owner" maxlength="120">
+            </div>
+            <div>
+              <label for="work-next-step">Next Step</label>
+              <input id="work-next-step" name="next_step">
+            </div>
+            <div>
+              <label for="work-source-type">Source Type</label>
+              <select id="work-source-type" name="source_type_id">
+                <option value="">No source</option>
+                {% for st in source_types %}
+                  {% if st.is_active %}
+                    <option value="{{ st.id }}">{{ st.name }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="work-due-date">Due Date</label>
+              <input id="work-due-date" name="due_date" type="date">
+            </div>
+            <div>
+              <label for="work-link">Link</label>
+              <input id="work-link" name="link" maxlength="500">
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit">Create Work Item</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <h2>Dependencies</h2>
-  </div>
-
-  <details id="new-dependency" class="collapsible-panel"{% if show_new_dependency == "1" or dependency_error %} open{% endif %}>
-    <summary class="button">New Dependency</summary>
-    <div class="collapsible-body">
-      {% if dependency_error %}<div class="error">{{ dependency_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/dependencies/create">
-        <label for="dependency-title">Title</label>
-        <input id="dependency-title" name="title" required maxlength="200">
-        <label for="dependency-description">Description</label>
-        <textarea id="dependency-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="dependency-type">Type</label>
-            <select id="dependency-type" name="dependency_type">
-              {% for dt in DEPENDENCY_TYPES %}
-                <option value="{{ dt }}">{{ dt | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="dependency-status">Status</label>
-            <select id="dependency-status" name="status">
-              {% for ds in DEPENDENCY_STATUSES %}
-                <option value="{{ ds }}">{{ ds | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="blocking-level">Blocking Level</label>
-            <select id="blocking-level" name="blocking_level">
-              {% for bl in BLOCKING_LEVELS %}
-                <option value="{{ bl }}"{% if bl == "medium" %} selected{% endif %}>{{ bl | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="dependency-owner">Owner</label>
-            <input id="dependency-owner" name="owner" maxlength="120">
-          </div>
-          <div>
-            <label for="external-team">External Team</label>
-            <input id="external-team" name="external_team" maxlength="120">
-          </div>
-          <div>
-            <label for="dependency-due-date">Due Date</label>
-            <input id="dependency-due-date" name="due_date" type="date">
-          </div>
-          <div>
-            <label for="last-confirmation-at">Last Confirmation</label>
-            <input id="last-confirmation-at" name="last_confirmation_at" type="datetime-local">
-          </div>
-        </div>
-        <label for="dependency-notes">Notes</label>
-        <textarea id="dependency-notes" name="notes"></textarea>
-        <div class="actions">
-          <button type="submit">Create Dependency</button>
-        </div>
-      </form>
-    </div>
-  </details>
+  <h2>Dependencies</h2>
 
   {% if edit_dependency %}
   <details id="edit-dependency" class="collapsible-panel" open>
@@ -1206,64 +1146,71 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-dependency"{% if show_new_dependency == "1" or dependency_error %} open{% endif %}>
+      <summary class="button">New Dependency</summary>
+      <div class="section-action-form">
+        {% if dependency_error %}<div class="error">{{ dependency_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/dependencies/create">
+          <label for="dependency-title">Title</label>
+          <input id="dependency-title" name="title" required maxlength="200">
+          <label for="dependency-description">Description</label>
+          <textarea id="dependency-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="dependency-type">Type</label>
+              <select id="dependency-type" name="dependency_type">
+                {% for dt in DEPENDENCY_TYPES %}
+                  <option value="{{ dt }}">{{ dt | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="dependency-status">Status</label>
+              <select id="dependency-status" name="status">
+                {% for ds in DEPENDENCY_STATUSES %}
+                  <option value="{{ ds }}">{{ ds | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="blocking-level">Blocking Level</label>
+              <select id="blocking-level" name="blocking_level">
+                {% for bl in BLOCKING_LEVELS %}
+                  <option value="{{ bl }}"{% if bl == "medium" %} selected{% endif %}>{{ bl | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="dependency-owner">Owner</label>
+              <input id="dependency-owner" name="owner" maxlength="120">
+            </div>
+            <div>
+              <label for="external-team">External Team</label>
+              <input id="external-team" name="external_team" maxlength="120">
+            </div>
+            <div>
+              <label for="dependency-due-date">Due Date</label>
+              <input id="dependency-due-date" name="due_date" type="date">
+            </div>
+            <div>
+              <label for="last-confirmation-at">Last Confirmation</label>
+              <input id="last-confirmation-at" name="last_confirmation_at" type="datetime-local">
+            </div>
+          </div>
+          <label for="dependency-notes">Notes</label>
+          <textarea id="dependency-notes" name="notes"></textarea>
+          <div class="actions">
+            <button type="submit">Create Dependency</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <h2>Risks</h2>
-  </div>
-
-  <details id="new-risk" class="collapsible-panel"{% if show_new_risk == "1" or risk_error %} open{% endif %}>
-    <summary class="button">New Risk</summary>
-    <div class="collapsible-body">
-      {% if risk_error %}<div class="error">{{ risk_error }}</div>{% endif %}
-      <form method="post" action="/programs/{{ program.id }}/risks/create">
-        <label for="risk-title">Title</label>
-        <input id="risk-title" name="title" required maxlength="200">
-        <label for="risk-description">Description</label>
-        <textarea id="risk-description" name="description"></textarea>
-        <div class="compact-fields">
-          <div>
-            <label for="risk-severity">Severity</label>
-            <select id="risk-severity" name="severity">
-              {% for s in RISK_SEVERITIES %}
-                <option value="{{ s }}"{% if s == "medium" %} selected{% endif %}>{{ s | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="risk-likelihood">Likelihood</label>
-            <select id="risk-likelihood" name="likelihood">
-              {% for l in RISK_LIKELIHOODS %}
-                <option value="{{ l }}"{% if l == "possible" %} selected{% endif %}>{{ l | replace('_', ' ') | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="risk-status">Status</label>
-            <select id="risk-status" name="status">
-              {% for rs in RISK_STATUSES %}
-                <option value="{{ rs }}">{{ rs | title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="risk-owner">Owner</label>
-            <input id="risk-owner" name="owner" maxlength="120">
-          </div>
-          <div>
-            <label for="risk-target">Target Resolution</label>
-            <input id="risk-target" name="target_resolution_date" type="date">
-          </div>
-        </div>
-        <label for="risk-mitigation">Mitigation</label>
-        <textarea id="risk-mitigation" name="mitigation"></textarea>
-        <div class="actions">
-          <button type="submit">Create Risk</button>
-        </div>
-      </form>
-    </div>
-  </details>
+  <h2>Risks</h2>
 
   {% if edit_risk %}
   <details id="edit-risk" class="collapsible-panel" open>
@@ -1423,58 +1370,63 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-risk"{% if show_new_risk == "1" or risk_error %} open{% endif %}>
+      <summary class="button">New Risk</summary>
+      <div class="section-action-form">
+        {% if risk_error %}<div class="error">{{ risk_error }}</div>{% endif %}
+        <form method="post" action="/programs/{{ program.id }}/risks/create">
+          <label for="risk-title">Title</label>
+          <input id="risk-title" name="title" required maxlength="200">
+          <label for="risk-description">Description</label>
+          <textarea id="risk-description" name="description"></textarea>
+          <div class="compact-fields">
+            <div>
+              <label for="risk-severity">Severity</label>
+              <select id="risk-severity" name="severity">
+                {% for s in RISK_SEVERITIES %}
+                  <option value="{{ s }}"{% if s == "medium" %} selected{% endif %}>{{ s | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="risk-likelihood">Likelihood</label>
+              <select id="risk-likelihood" name="likelihood">
+                {% for l in RISK_LIKELIHOODS %}
+                  <option value="{{ l }}"{% if l == "possible" %} selected{% endif %}>{{ l | replace('_', ' ') | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="risk-status">Status</label>
+              <select id="risk-status" name="status">
+                {% for rs in RISK_STATUSES %}
+                  <option value="{{ rs }}">{{ rs | title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="risk-owner">Owner</label>
+              <input id="risk-owner" name="owner" maxlength="120">
+            </div>
+            <div>
+              <label for="risk-target">Target Resolution</label>
+              <input id="risk-target" name="target_resolution_date" type="date">
+            </div>
+          </div>
+          <label for="risk-mitigation">Mitigation</label>
+          <textarea id="risk-mitigation" name="mitigation"></textarea>
+          <div class="actions">
+            <button type="submit">Create Risk</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 
 <section class="panel">
   <h2>Relationships</h2>
-
-  <details id="new-relationship" class="collapsible-panel"{% if show_new_relationship == "1" or relationship_error %} open{% endif %}>
-    <summary class="button">New Relationship</summary>
-    <div class="collapsible-body">
-      {% if relationship_error %}<div class="error">{{ relationship_error }}</div>{% endif %}
-      {% if all_program_objects %}
-      <form method="post" action="/programs/{{ program.id }}/relationships/create">
-        <div class="compact-fields">
-          <div>
-            <label for="rel-source">Source</label>
-            <select id="rel-source" name="source_ref" required>
-              <option value="">Select source…</option>
-              {% for obj in all_program_objects %}
-                <option value="{{ obj.type }}:{{ obj.id }}">{{ obj.display_id }} — {{ obj.title | truncate(60) }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="rel-type">Relationship</label>
-            <select id="rel-type" name="relationship_type" required>
-              {% for rt in RELATIONSHIP_TYPES %}
-                <option value="{{ rt }}">{{ rt | replace('_', ' ') }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="rel-target">Target</label>
-            <select id="rel-target" name="target_ref" required>
-              <option value="">Select target…</option>
-              {% for obj in all_program_objects %}
-                <option value="{{ obj.type }}:{{ obj.id }}">{{ obj.display_id }} — {{ obj.title | truncate(60) }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="rel-note">Note</label>
-            <input id="rel-note" name="note" maxlength="500" placeholder="Optional note">
-          </div>
-        </div>
-        <div class="actions">
-          <button type="submit">Add Relationship</button>
-        </div>
-      </form>
-      {% else %}
-      <p class="muted">Add work items, dependencies, risks, or status reports to this program before creating relationships.</p>
-      {% endif %}
-    </div>
-  </details>
 
   {% if relationships %}
   <table>
@@ -1515,6 +1467,55 @@
   {% else %}
   <p class="muted empty-state">No relationships yet.</p>
   {% endif %}
+  <div class="section-action">
+    <details id="new-relationship"{% if show_new_relationship == "1" or relationship_error %} open{% endif %}>
+      <summary class="button">New Relationship</summary>
+      <div class="section-action-form">
+        {% if relationship_error %}<div class="error">{{ relationship_error }}</div>{% endif %}
+        {% if all_program_objects %}
+        <form method="post" action="/programs/{{ program.id }}/relationships/create">
+          <div class="compact-fields">
+            <div>
+              <label for="rel-source">Source</label>
+              <select id="rel-source" name="source_ref" required>
+                <option value="">Select source…</option>
+                {% for obj in all_program_objects %}
+                  <option value="{{ obj.type }}:{{ obj.id }}">{{ obj.display_id }} — {{ obj.title | truncate(60) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="rel-type">Relationship</label>
+              <select id="rel-type" name="relationship_type" required>
+                {% for rt in RELATIONSHIP_TYPES %}
+                  <option value="{{ rt }}">{{ rt | replace('_', ' ') }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="rel-target">Target</label>
+              <select id="rel-target" name="target_ref" required>
+                <option value="">Select target…</option>
+                {% for obj in all_program_objects %}
+                  <option value="{{ obj.type }}:{{ obj.id }}">{{ obj.display_id }} — {{ obj.title | truncate(60) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="rel-note">Note</label>
+              <input id="rel-note" name="note" maxlength="500" placeholder="Optional note">
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit">Add Relationship</button>
+          </div>
+        </form>
+        {% else %}
+        <p class="muted">Add work items, dependencies, risks, or status reports to this program before creating relationships.</p>
+        {% endif %}
+      </div>
+    </details>
+  </div>
 </section>
 
 <div class="placeholder-grid">

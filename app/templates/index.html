@@ -13,30 +13,6 @@
 </header>
 <section class="panel">
   <h2>Programs</h2>
-  <details id="new-program" class="collapsible-panel">
-    <summary class="button">Add New Program</summary>
-    <div class="collapsible-body">
-      <form method="post" action="/programs/create">
-        <label for="name">Name</label>
-        <input id="name" name="name" required maxlength="200">
-        <label for="description">Description</label>
-        <textarea id="description" name="description"></textarea>
-        <label for="launch_date">Launch Date</label>
-        <input id="launch_date" name="launch_date" type="date">
-        <label for="status">Status</label>
-        <select id="status" name="status">
-          {% for ps in all_statuses %}
-            {% if ps.is_active %}
-              <option value="{{ ps.slug }}">{{ ps.name }}</option>
-            {% endif %}
-          {% endfor %}
-        </select>
-        <div class="actions">
-          <button type="submit">Create Program</button>
-        </div>
-      </form>
-    </div>
-  </details>
   <form class="filters" method="get" action="/">
     <div>
       <label for="status_filter">Status</label>
@@ -119,5 +95,31 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="section-action">
+    <details id="new-program">
+      <summary class="button">Add New Program</summary>
+      <div class="section-action-form">
+        <form method="post" action="/programs/create">
+          <label for="name">Name</label>
+          <input id="name" name="name" required maxlength="200">
+          <label for="description">Description</label>
+          <textarea id="description" name="description"></textarea>
+          <label for="launch_date">Launch Date</label>
+          <input id="launch_date" name="launch_date" type="date">
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            {% for ps in all_statuses %}
+              {% if ps.is_active %}
+                <option value="{{ ps.slug }}">{{ ps.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <div class="actions">
+            <button type="submit">Create Program</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </section>
 {% endblock %}

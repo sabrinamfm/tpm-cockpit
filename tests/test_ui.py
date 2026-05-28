@@ -113,8 +113,8 @@ def test_new_work_item_form_is_collapsed_by_default(client) -> None:
     opened_response = client.get(f"/programs/{program['id']}/view?show_new_work_item=1")
 
     assert default_response.status_code == 200
-    assert '<details id="new-work-item" class="collapsible-panel">' in default_response.text
-    assert '<details id="new-work-item" class="collapsible-panel" open>' in opened_response.text
+    assert '<details id="new-work-item">' in default_response.text
+    assert '<details id="new-work-item" open>' in opened_response.text
 
 
 def test_new_work_item_validation_reopens_form_with_error(client) -> None:
@@ -127,7 +127,7 @@ def test_new_work_item_validation_reopens_form_with_error(client) -> None:
     )
 
     assert response.status_code == 200
-    assert '<details id="new-work-item" class="collapsible-panel" open>' in response.text
+    assert '<details id="new-work-item" open>' in response.text
     assert "Title and status are required." in response.text
 
 
@@ -233,8 +233,8 @@ def test_dependency_section_is_visible_with_hidden_create_panel(client) -> None:
 
     assert default_response.status_code == 200
     assert "Dependencies" in default_response.text
-    assert '<details id="new-dependency" class="collapsible-panel">' in default_response.text
-    assert '<details id="new-dependency" class="collapsible-panel" open>' in opened_response.text
+    assert '<details id="new-dependency">' in default_response.text
+    assert '<details id="new-dependency" open>' in opened_response.text
 
 
 def test_dependency_ui_filters_and_inline_edit(client) -> None:
